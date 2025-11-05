@@ -44,20 +44,23 @@ fun UsersScreen(
     val error by viewModel.error.collectAsState()
     val archiveSuccess by viewModel.archiveSuccess.collectAsState()
     val archiveError by viewModel.archiveError.collectAsState()
+    val verificationSuccess by viewModel.verificationSuccess.collectAsState()
+    val verificationError by viewModel.verificationError.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var showSuccessSnackbar by remember { mutableStateOf(false) }
     var showErrorSnackbar by remember { mutableStateOf(false) }
+    var snackbarMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         viewModel.fetchUsers()
     }
 
-    // Handle archive success/error messages
+    // Handle archive messages
     LaunchedEffect(archiveSuccess) {
         if (archiveSuccess != null) {
+            snackbarMessage = archiveSuccess ?: ""
             showSuccessSnackbar = true
-            // Clear message after showing
             kotlinx.coroutines.delay(3000)
             viewModel.clearArchiveMessages()
             showSuccessSnackbar = false
@@ -66,6 +69,7 @@ fun UsersScreen(
 
     LaunchedEffect(archiveError) {
         if (archiveError != null) {
+            snackbarMessage = archiveError ?: ""
             showErrorSnackbar = true
             kotlinx.coroutines.delay(3000)
             viewModel.clearArchiveMessages()
@@ -73,7 +77,28 @@ fun UsersScreen(
         }
     }
 
-    // Filtered users based on search query
+    // Handle verification messages
+    LaunchedEffect(verificationSuccess) {
+        if (verificationSuccess != null) {
+            snackbarMessage = verificationSuccess ?: ""
+            showSuccessSnackbar = true
+            kotlinx.coroutines.delay(3000)
+            viewModel.clearVerificationMessages()
+            showSuccessSnackbar = false
+        }
+    }
+
+    LaunchedEffect(verificationError) {
+        if (verificationError != null) {
+            snackbarMessage = verificationError ?: ""
+            showErrorSnackbar = true
+            kotlinx.coroutines.delay(3000)
+            viewModel.clearVerificationMessages()
+            showErrorSnackbar = false
+        }
+    }
+
+    // Filtered users
     val filteredUsers = if (searchQuery.isBlank()) {
         users
     } else {
@@ -85,21 +110,17 @@ fun UsersScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             SearchFilterHeader(
                 title = "Manage Users",
                 searchPlaceholder = "Search users…",
                 searchQuery = searchQuery,
                 onSearchChange = { searchQuery = it },
-                onFilterClick = { /* TODO: open filter dialog */ },
+                onFilterClick = { },
                 showFilter = false
             )
 
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 when {
                     loading -> {
                         Column(
@@ -153,14 +174,6 @@ fun UsersScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Try adjusting your search or filters.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 32.dp)
-                            )
                         }
                     }
 
@@ -178,11 +191,14 @@ fun UsersScreen(
                             ) { user ->
                                 UserCard(
                                     user = user,
-                                    onEditClick = {
-                                        // TODO: Handle edit
-                                    },
                                     onDeleteClick = {
                                         viewModel.archiveUser(user.id)
+                                    },
+                                    onApproveId = { userId, applyDiscount ->
+                                        viewModel.approveUserId(userId, applyDiscount)
+                                    },
+                                    onRejectId = { userId, reason ->
+                                        viewModel.rejectUserId(userId, reason)
                                     }
                                 )
                             }
@@ -193,26 +209,26 @@ fun UsersScreen(
         }
 
         // Success Snackbar
-        if (showSuccessSnackbar && archiveSuccess != null) {
+        if (showSuccessSnackbar) {
             androidx.compose.material3.Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp),
                 containerColor = Color(0xFF4CAF50)
             ) {
-                Text(archiveSuccess ?: "", color = Color.White)
+                Text(snackbarMessage, color = Color.White)
             }
         }
 
         // Error Snackbar
-        if (showErrorSnackbar && archiveError != null) {
+        if (showErrorSnackbar) {
             androidx.compose.material3.Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp),
                 containerColor = MaterialTheme.colorScheme.error
             ) {
-                Text(archiveError ?: "", color = Color.White)
+                Text(snackbarMessage, color = Color.White)
             }
         }
     }

@@ -8,6 +8,8 @@ import com.example.azureaadmin.data.models.AdminLoginResponse
 import com.example.azureaadmin.data.models.AdminStatsResponse
 import com.example.azureaadmin.data.models.Amenity
 import com.example.azureaadmin.data.models.AmenityRequest
+import com.example.azureaadmin.data.models.ApproveIdRequest
+import com.example.azureaadmin.data.models.ApproveIdResponse
 import com.example.azureaadmin.data.models.Area
 import com.example.azureaadmin.data.models.AreaDetail
 import com.example.azureaadmin.data.models.BookingDetailsResponse
@@ -17,6 +19,8 @@ import com.example.azureaadmin.data.models.BookingStatusResponse
 import com.example.azureaadmin.data.models.MessageResponse
 import com.example.azureaadmin.data.models.RecordPaymentRequest
 import com.example.azureaadmin.data.models.RecordPaymentResponse
+import com.example.azureaadmin.data.models.RejectIdRequest
+import com.example.azureaadmin.data.models.RejectIdResponse
 import com.example.azureaadmin.data.models.Room
 import com.example.azureaadmin.data.models.RoomDetail
 import com.example.azureaadmin.data.models.UpdateBookingStatusRequest
@@ -423,6 +427,14 @@ class AdminRepository(private val context: Context) {
 
     suspend fun archiveUser(userId: Int): Response<MessageResponse> {
         return api.archiveUser(userId)
+    }
+
+    suspend fun approveValidId(userId: Int, isSeniorOrPwd: Boolean): Response<ApproveIdResponse> {
+        return api.approveValidId(userId, ApproveIdRequest(isSeniorOrPwd))
+    }
+
+    suspend fun rejectValidId(userId: Int, reason: String): Response<RejectIdResponse> {
+        return api.rejectValidId(userId, RejectIdRequest(reason))
     }
 
     // Archived Users

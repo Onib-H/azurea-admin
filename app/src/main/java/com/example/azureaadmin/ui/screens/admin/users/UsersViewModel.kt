@@ -30,6 +30,12 @@ class UsersViewModel(private val repository: AdminRepository) : ViewModel() {
     private val _archiveError = MutableStateFlow<String?>(null)
     val archiveError: StateFlow<String?> = _archiveError
 
+    private val _verificationSuccess = MutableStateFlow<String?>(null)
+    val verificationSuccess: StateFlow<String?> = _verificationSuccess
+
+    private val _verificationError = MutableStateFlow<String?>(null)
+    val verificationError: StateFlow<String?> = _verificationError
+
     private var currentPage = 1
     private val pageSize = 10
 
@@ -93,5 +99,65 @@ class UsersViewModel(private val repository: AdminRepository) : ViewModel() {
     fun clearArchiveMessages() {
         _archiveSuccess.value = null
         _archiveError.value = null
+    }
+
+    fun approveUserId(userId: Int, isSeniorOrPwd: Boolean) {
+        viewModelScope.launch {
+            try {
+                val response = repository.approveValidId(userId, isSeniorOrPwd)
+                if (response.isSuccessful) {
+                    response.body()?.let { result ->
+                        _verificationSuccess.value = result.message
+                        // Update the user in the list
+                        _users.value = _users.value.map { user ->
+                            if (user.id == userId) {
+                                result.user
+                            } else {
+                                user
+                            }
+                        }
+                        _verificationError.value = null
+                    }
+                } else {
+                    _verificationError.value = "Failed to approve ID: ${response.code()}"
+                }
+            } catch (e: Exception) {
+                _verificationError.value = e.localizedMessage ?: "Unknown error"
+            }
+        }
+    }
+
+    fun rejectUserId(userId: Int, reason: String) {
+        viewModelScope.launch {
+            try {
+                val response = repository.rejectValidId(userId, reason)
+                if (response.isSuccessful) {
+                    response.body()?.let { result ->
+                        _verificationSuccess.value = result.message
+                        // Update the user in the list
+                        _users.value = _users.value.map { user ->
+                            if (user.id == userId) {
+                                user.copy(
+                                    is_verified = result.is_verified,
+                                    valid_id_rejection_reason = result.valid_id_rejection_reason
+                                )
+                            } else {
+                                user
+                            }
+                        }
+                        _verificationError.value = null
+                    }
+                } else {
+                    _verificationError.value = "Failed to reject ID: ${response.code()}"
+                }
+            } catch (e: Exception) {
+                _verificationError.value = e.localizedMessage ?: "Unknown error"
+            }
+        }
+    }
+
+    fun clearVerificationMessages() {
+        _verificationSuccess.value = null
+        _verificationError.value = null
     }
 }

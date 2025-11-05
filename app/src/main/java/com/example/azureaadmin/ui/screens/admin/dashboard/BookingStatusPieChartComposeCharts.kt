@@ -81,7 +81,7 @@ fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>) {
             )
 
             Text(
-                text = "October 2025",
+                text = "November 2025",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray,
                 fontSize = 12.sp,

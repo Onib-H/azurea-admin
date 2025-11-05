@@ -1,12 +1,10 @@
 package com.example.azureaadmin.ui.screens.admin.users
 
-
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,20 +15,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Schedule
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -54,191 +53,181 @@ import com.example.azureaadmin.ui.components.modals.DeleteItemDialog
 fun UserCard(
     user: User,
     onEditClick: () -> Unit = {},
-    onDeleteClick: () -> Unit = {}
+    onDeleteClick: () -> Unit = {},
+    onApproveId: (Int, Boolean) -> Unit = { _, _ -> },
+    onRejectId: (Int, String) -> Unit = { _, _ -> }
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showVerificationDialog by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    val (statusColor, statusIcon) = when (user.is_verified) {
+        "verified" -> Color(0xFF4CAF50) to Icons.Outlined.CheckCircle
+        "pending" -> Color(0xFFFFA726) to Icons.Outlined.Schedule
+        "rejected" -> Color(0xFFF44336) to Icons.Outlined.Cancel
+        else -> Color(0xFF9E9E9E) to Icons.Outlined.Cancel
+    }
+
+
+    val hasUploadedId = !user.valid_id_front.isNullOrEmpty() && !user.valid_id_back.isNullOrEmpty()
+    val showVerifyOption = user.is_verified == "pending" && hasUploadedId
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Profile Image with Verification Indicator
-            Box(
-                modifier = Modifier.size(64.dp)
+            // Header Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                AsyncImage(
-                    model = user.profile_image,
-                    contentDescription = "Profile picture",
-                    modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .border(
-                            width = 2.dp,
-                            color = when (user.is_verified) {
-                                "verified" -> Color(0xFF4CAF50).copy(alpha = 0.3f)
-                                "pending" -> Color(0xFFFFA726).copy(alpha = 0.3f)
-                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            },
-                            shape = CircleShape
-                        ),
-                    contentScale = ContentScale.Crop
-                )
-
-                // Verification Badge Overlay
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(20.dp),
-                    shape = CircleShape,
-                    color = when (user.is_verified) {
-                        "verified" -> Color(0xFF4CAF50)
-                        "pending" -> Color(0xFFFFA726)
-                        else -> Color(0xFF9E9E9E)
-                    },
-                    border = BorderStroke(2.dp, MaterialTheme.colorScheme.surface)
+                Box(
+                    modifier = Modifier.size(54.dp),
+                    contentAlignment = Alignment.BottomEnd
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    AsyncImage(
+                        model = user.profile_image,
+                        contentDescription = "Profile picture",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(CircleShape)
+                            .border(1.5.dp, statusColor.copy(alpha = 0.6f), CircleShape)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, Color.White, CircleShape)
+                            .background(statusColor.copy(alpha = 0.9f)),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
-                            imageVector = when (user.is_verified) {
-                                "verified" -> Icons.Outlined.CheckCircle
-                                "pending" -> Icons.Outlined.Schedule
-                                else -> Icons.Outlined.Cancel
-                            },
+                            imageVector = statusIcon,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(12.dp)
                         )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(16.dp))
+                Spacer(Modifier.width(12.dp))
 
-            // User Information
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                // Name
-                Text(
-                    text = "${user.first_name} ${user.last_name}",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Email with Icon
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Email,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = user.email,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Status Tags Row
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Verification Status
-                    StatusChip(
-                        text = when (user.is_verified) {
-                            "verified" -> "Verified"
-                            "pending" -> "Pending"
-                            else -> "Unverified"
-                        },
-                        color = when (user.is_verified) {
-                            "verified" -> Color(0xFF4CAF50)
-                            "pending" -> Color(0xFFFFA726)
-                            else -> Color(0xFF9E9E9E)
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "${user.first_name} ${user.last_name}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (user.is_senior_or_pwd) Color(0xFFFF9800)
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                        if (user.is_senior_or_pwd) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 6.dp)
+                                    .size(22.dp)
+                                    .background(
+                                        color = Color(0xFFFF9800).copy(alpha = 0.15f),
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Accessibility,
+                                    contentDescription = "Senior/PWD",
+                                    tint = Color(0xFFFF9800),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
-                    )
+                    }
 
-                    // Senior/PWD Badge
-                    if (user.is_senior_or_pwd) {
-                        StatusChip(
-                            text = "SENIOR/PWD",
-                            color = Color(0xFFFF9800)
+                    Spacer(Modifier.height(2.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Outlined.Email,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = user.email,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
 
-                // Action Buttons Row
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onEditClick,
-                        modifier = Modifier.height(36.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
-                    ) {
+
+                // Menu button
+                Box {
+                    IconButton(onClick = { menuExpanded = true }) {
                         Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = "More Options",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Edit", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
 
-                    OutlinedButton(
-                        onClick = { showDeleteDialog = true },
-                        modifier = Modifier.height(36.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier.background(Color.White)
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
+                        if (showVerifyOption) {
+                            DropdownMenuItem(
+                                text = { Text("Verify ID") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showVerificationDialog = true
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Filled.Edit,
+                                        contentDescription = null,
+                                        tint = Color(0xFF6A1B9A)
+                                    )
+                                }
+                            )
+                        }
+
+                        DropdownMenuItem(
+                            text = { Text("Archive", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                menuExpanded = false
+                                showDeleteDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Delete", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
         }
     }
 
-    // Delete Confirmation Dialog
+    // Delete Modal
     DeleteItemDialog(
         show = showDeleteDialog,
         itemLabel = "User",
@@ -247,29 +236,28 @@ fun UserCard(
             showDeleteDialog = false
             onDeleteClick()
         },
-        icon = Icons.Filled.Warning,
+        icon = Icons.Filled.Delete,
         title = "Archive User",
         description = "Are you sure you want to archive this user?",
         confirmButtonText = "Archive"
     )
-}
 
-@Composable
-private fun StatusChip(
-    text: String,
-    color: Color
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = color.copy(alpha = 0.12f)
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-            letterSpacing = 0.3.sp
+    // Verification Modal
+    if (showVerificationDialog) {
+        GuestIdVerificationDialog(
+            idType = user.valid_id_type_display ?: "Unknown ID",
+            frontIdUrl = user.valid_id_front,
+            backIdUrl = user.valid_id_back,
+            applyDiscountDefault = user.is_senior_or_pwd,
+            onDismiss = { showVerificationDialog = false },
+            onApprove = { applyDiscount ->
+                onApproveId(user.id, applyDiscount)
+                showVerificationDialog = false
+            },
+            onReject = { reason ->
+                onRejectId(user.id, reason)
+                showVerificationDialog = false
+            }
         )
     }
 }

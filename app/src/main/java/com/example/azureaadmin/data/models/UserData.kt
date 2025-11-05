@@ -30,3 +30,23 @@ data class User(
     val last_booking_date: String?,
     val is_senior_or_pwd: Boolean
 )
+
+data class ApproveIdRequest(
+    val is_senior_or_pwd: Boolean
+)
+
+data class ApproveIdResponse(
+    val message: String,
+    val user: User
+)
+
+data class RejectIdRequest(
+    val reason: String
+)
+
+data class RejectIdResponse(
+    val message: String,
+    val user_id: Int,
+    val is_verified: String,
+    val valid_id_rejection_reason: String
+)

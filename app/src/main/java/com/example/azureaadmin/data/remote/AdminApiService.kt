@@ -5,6 +5,8 @@ import com.example.azureaadmin.data.models.AdminLoginResponse
 import com.example.azureaadmin.data.models.AdminStatsResponse
 import com.example.azureaadmin.data.models.AmenityRequest
 import com.example.azureaadmin.data.models.AmenityResponse
+import com.example.azureaadmin.data.models.ApproveIdRequest
+import com.example.azureaadmin.data.models.ApproveIdResponse
 import com.example.azureaadmin.data.models.AreaDetailResponse
 import com.example.azureaadmin.data.models.AreaResponse
 import com.example.azureaadmin.data.models.AreaResponseSingle
@@ -14,6 +16,8 @@ import com.example.azureaadmin.data.models.BookingStatusResponse
 import com.example.azureaadmin.data.models.MessageResponse
 import com.example.azureaadmin.data.models.RecordPaymentRequest
 import com.example.azureaadmin.data.models.RecordPaymentResponse
+import com.example.azureaadmin.data.models.RejectIdRequest
+import com.example.azureaadmin.data.models.RejectIdResponse
 import com.example.azureaadmin.data.models.RoomDetailResponse
 import com.example.azureaadmin.data.models.RoomResponse
 import com.example.azureaadmin.data.models.RoomResponseSingle
@@ -194,6 +198,18 @@ interface AdminApiService {
 
     @PUT("master/archived_user/{user_id}")
     suspend fun archiveUser(@Path("user_id") userId: Int): Response<MessageResponse>
+
+    @PUT("master/approve_valid_id/{user_id}")
+    suspend fun approveValidId(
+        @Path("user_id") userId: Int,
+        @Body request: ApproveIdRequest
+    ): Response<ApproveIdResponse>
+
+    @PUT("master/reject_valid_id/{user_id}")
+    suspend fun rejectValidId(
+        @Path("user_id") userId: Int,
+        @Body request: RejectIdRequest
+    ): Response<RejectIdResponse>
 
 
     // Archived Users

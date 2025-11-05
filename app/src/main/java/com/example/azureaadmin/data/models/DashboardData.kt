@@ -1,7 +1,5 @@
 package com.example.azureaadmin.data.models
 
-import androidx.compose.ui.graphics.Color
-
 data class AdminStatsResponse(
     val total_rooms: Int,
     val available_rooms: Int,
@@ -25,12 +23,7 @@ data class AdminStatsResponse(
 
 
 
-//data class DashboardStat(
-//    val label: String,
-//    val value: String,
-//    val colors: List<Color>,
-//    val icon: androidx.compose.ui.graphics.vector.ImageVector
-//)
+
 
 data class BookingStatusResponse(
     val pending: Int,

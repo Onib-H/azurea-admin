@@ -25,15 +25,6 @@ data class AreaResponse(
     val data: List<Area>
 )
 
-//data class AreaRequest(
-//    val area_name: String,
-//    val description: String,
-//    val images: List<String>? = null,  // not required
-//    val status: String? = "available", // default
-//    val capacity: Int,
-//    val price_per_hour: String,
-//    val discount_percent: Int = 0
-//)
 
 data class AreaResponseSingle(
     val message: String,
