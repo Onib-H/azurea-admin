@@ -35,22 +35,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.azureaadmin.data.models.BookingStatusCounts
+import com.example.azureaadmin.ui.theme.BlueSecondary
+import com.example.azureaadmin.ui.theme.PurplePrimary
 import ir.ehsannarmani.compose_charts.PieChart
 import ir.ehsannarmani.compose_charts.models.Pie
 import kotlinx.coroutines.launch
+import java.time.YearMonth
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.math.roundToInt
 
+
 @Composable
-fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>) {
+fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>, selectedMonth: YearMonth) {
+
     val statusColorMap = mapOf(
-        "Pending" to Color(0xFFFF6B6B),
-        "Reserved" to Color(0xFFFFD93D),
-        "Checked In" to Color(0xFF45B7D1),
-        "Checked Out" to Color(0xFF96CEB4),
-        "Cancelled" to Color(0xFF4ECDC4),
-        "No Show" to Color(0xFFA8A8A8),
-        "Rejected" to Color(0xFFFF8C42)
+        "Pending" to Color(0xFFFFC107),
+        "Reserved" to BlueSecondary,
+        "Checked In" to Color(0xFF66BB6A),
+        "Checked Out" to Color(0xFF29B6F6),
+        "Cancelled" to Color(0xFFE53935),
+        "No Show" to Color(0xFF8D6E63),
+        "Rejected" to PurplePrimary
     )
+
+    val highlightPurple = PurplePrimary.copy(alpha = 0.08f)
 
     val nonZeroCounts = counts.filter { it.count > 0 }
     val total = counts.sumOf { it.count }
@@ -73,6 +82,7 @@ fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>) {
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
             Text(
                 text = "Booking Status Distribution",
                 style = MaterialTheme.typography.titleLarge,
@@ -81,7 +91,7 @@ fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>) {
             )
 
             Text(
-                text = "November 2025",
+                text = "${selectedMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())} ${selectedMonth.year}",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray,
                 fontSize = 12.sp,
@@ -155,16 +165,12 @@ fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>) {
             ) {
                 itemsIndexed(counts) { index, status ->
                     val isSelected = selectedSlice?.label == status.label
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (isSelected)
-                                    statusColorMap[status.label]?.copy(alpha = 0.2f)
-                                        ?: Color.Gray.copy(alpha = 0.2f)
-                                else Color.Transparent
-                            )
+                            .background(if (isSelected) highlightPurple else Color.Transparent)
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                             .clickable {
                                 selectedSlice = status

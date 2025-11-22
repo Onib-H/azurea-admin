@@ -13,7 +13,14 @@ import com.example.azureaadmin.data.models.AreaResponseSingle
 import com.example.azureaadmin.data.models.BookingDetailsResponse
 import com.example.azureaadmin.data.models.BookingResponse
 import com.example.azureaadmin.data.models.BookingStatusResponse
+import com.example.azureaadmin.data.models.DailyBookingsResponse
+import com.example.azureaadmin.data.models.DailyCancellationsResponse
+import com.example.azureaadmin.data.models.DailyCheckInCheckoutResponse
+import com.example.azureaadmin.data.models.DailyNoShowRejectedResponse
+import com.example.azureaadmin.data.models.DailyRevenueResponse
 import com.example.azureaadmin.data.models.MessageResponse
+import com.example.azureaadmin.data.models.PropertyBookingResponse
+import com.example.azureaadmin.data.models.PropertyRevenueResponse
 import com.example.azureaadmin.data.models.RecordPaymentRequest
 import com.example.azureaadmin.data.models.RecordPaymentResponse
 import com.example.azureaadmin.data.models.RejectIdRequest
@@ -61,13 +68,46 @@ interface AdminApiService {
     // Dashboard
 
     @GET("master/stats")
-    suspend fun getStats(): Response<AdminStatsResponse>
+    suspend fun getStats(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<AdminStatsResponse>
+
+    @GET("master/stats")
+    suspend fun getStatsForCurrentMonth(): Response<AdminStatsResponse>
 
     @GET("master/booking_status_counts")
     suspend fun getBookingStatusCounts(
         @Query("month") month: Int,
         @Query("year") year: Int
     ): Response<BookingStatusResponse>
+
+    @GET("master/daily_revenue")
+    suspend fun getDailyRevenue(): Response<DailyRevenueResponse>
+
+    @GET("master/daily_bookings")
+    suspend fun getDailyBookings(): Response<DailyBookingsResponse>
+
+    @GET("master/daily_cancellations")
+    suspend fun getDailyCancellations(): Response<DailyCancellationsResponse>
+
+    @GET("master/daily_checkins_checkouts")
+    suspend fun getDailyCheckinsCheckouts(): Response<DailyCheckInCheckoutResponse>
+
+    @GET("master/daily_no_shows_rejected")
+    suspend fun getDailyNoShowRejected(): Response<DailyNoShowRejectedResponse>
+
+    @GET("master/room_revenue")
+    suspend fun getRoomRevenue(): Response<PropertyRevenueResponse>
+
+    @GET("master/room_bookings")
+    suspend fun getRoomBookings(): Response<PropertyBookingResponse>
+
+    @GET("master/area_revenue")
+    suspend fun getAreaRevenue(): Response<PropertyRevenueResponse>
+
+    @GET("master/area_bookings")
+    suspend fun getAreaBookings(): Response<PropertyBookingResponse>
 
     // Booking
 

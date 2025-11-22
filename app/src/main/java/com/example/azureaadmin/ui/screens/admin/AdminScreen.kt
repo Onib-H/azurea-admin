@@ -79,7 +79,7 @@ fun AdminScreen(navController: NavController) {
         }
     }
 
-    var selectedItem by remember { mutableStateOf("Manage Users") }
+    var selectedItem by remember { mutableStateOf("Dashboard") }
 
     ModalNavigationDrawer(
         drawerState = drawerState,

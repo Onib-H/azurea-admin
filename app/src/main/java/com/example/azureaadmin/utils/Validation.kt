@@ -10,7 +10,7 @@ fun validateRoomInputs(
 ): ValidationResult {
     val errors = mutableMapOf<String, String>()
 
-    val isRoom = inputs.containsKey("Room Type") // determines whether it's a Room or Area
+    val isRoom = inputs.containsKey("Room Type")
 
     // Name validation
     if (inputs["Name"].isNullOrBlank()) {
@@ -32,7 +32,7 @@ fun validateRoomInputs(
     if (capacity == null || capacity <= 0) {
         errors["Capacity"] = "Valid ${if (isRoom) "max guests" else "capacity"} is required"
     } else {
-        if (isRoom && (capacity !in 1..10)) {
+        if (isRoom && (capacity !in 1..100)) {
             errors["Capacity"] = "Max guests must be between 1 and 10"
         } else if (!isRoom && (capacity !in 1..500)) {
             errors["Capacity"] = "Capacity must be between 1 and 500"

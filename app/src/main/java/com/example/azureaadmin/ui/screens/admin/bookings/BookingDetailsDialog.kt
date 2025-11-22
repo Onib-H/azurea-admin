@@ -61,6 +61,8 @@ import coil.compose.AsyncImage
 import com.example.azureaadmin.data.models.BookingDetails
 import com.example.azureaadmin.ui.components.button.DropdownField
 import com.example.azureaadmin.utils.FormatDate
+    import com.example.azureaadmin.utils.FormatTime
+    import java.time.LocalDate
 
     @Composable
     fun BookingDetailsDialog(
@@ -208,25 +210,29 @@ import com.example.azureaadmin.utils.FormatDate
                                         val remainingBalance = totalAmount - downPayment
                                         val totalPayment = if (downPayment == totalAmount) downPayment else downPayment + enteredAmount
 
+                                        val today = LocalDate.now() // current date
+
+                                        val checkInDate = booking.check_in_date.let { LocalDate.parse(it) }
+
+                                        val canMarkNoShow = today.isAfter(checkInDate) && booking.status.uppercase() == "RESERVED"
+
                                         // User must pay full remaining balance to check in
-                                        val canCheckIn = enteredAmount == remainingBalance || remainingBalance == 0.0
+                                        val canCheckIn = enteredAmount == remainingBalance || remainingBalance == 0.0 &&
+                                        today.isEqual(checkInDate)
+
+
 
                                         ActionButtonsTriple(
-                                            onMarkNoShow = {
-                                                showConfirmDialog = BookingAction.MarkNoShow(booking.id)
-                                            },
+                                            onMarkNoShow = { showConfirmDialog = BookingAction.MarkNoShow(booking.id) },
                                             onCancel = { showCancelDialog = true },
                                             onCheckIn = {
                                                 if (canCheckIn) {
-
                                                     if (enteredAmount > 0) {
-                                                        // ✅ Record the full payment (down payment + entered amount), then check in
                                                         viewModel.recordPaymentAndCheckIn(
                                                             bookingId = booking.id,
                                                             amount = totalPayment
                                                         )
                                                     } else {
-                                                        // Already fully paid — just update booking status
                                                         viewModel.updateBookingStatus(
                                                             bookingId = booking.id,
                                                             newStatus = "checked_in"
@@ -234,8 +240,10 @@ import com.example.azureaadmin.utils.FormatDate
                                                     }
                                                 }
                                             },
-                                            checkInEnabled = canCheckIn
+                                            checkInEnabled = canCheckIn,
+                                            markNoShowEnabled = canMarkNoShow
                                         )
+
                                     }
 
 
@@ -915,13 +923,14 @@ import com.example.azureaadmin.utils.FormatDate
             }
         }
     }
-    
+
     @Composable
     fun ActionButtonsTriple(
         onMarkNoShow: () -> Unit,
         onCancel: () -> Unit,
         onCheckIn: () -> Unit,
-        checkInEnabled: Boolean = true
+        checkInEnabled: Boolean = true,
+        markNoShowEnabled: Boolean = true
     ) {
         Column(
             modifier = Modifier
@@ -939,11 +948,16 @@ import com.example.azureaadmin.utils.FormatDate
             OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
                 Text("Cancel Booking")
             }
-            OutlinedButton(onClick = onMarkNoShow, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = onMarkNoShow,
+                enabled = markNoShowEnabled,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Text("Mark as No Show")
             }
         }
     }
+
     
     @Composable
     fun ActionButtonsSingle(label: String, onClick: () -> Unit) {
@@ -1040,8 +1054,10 @@ import com.example.azureaadmin.utils.FormatDate
         val checkInDate = FormatDate.format(booking.check_in_date)
         val checkOutDate = FormatDate.format(booking.check_out_date)
         val createdAt = FormatDate.format(booking.created_at)
-    
-    
+        val timeOfArrival = booking.time_of_arrival?.let { FormatTime.format(it) } ?: "08:00 PM"
+
+
+
         Column(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
@@ -1060,8 +1076,9 @@ import com.example.azureaadmin.utils.FormatDate
                 }
             )
     
-            InfoRow("Check-in", checkInDate)
+            InfoRow("Check-in", checkInDate,)
             InfoRow("Check-out", checkOutDate)
+            InfoRow("ETA", timeOfArrival)
     
             InfoRow(
                 label = "Status",

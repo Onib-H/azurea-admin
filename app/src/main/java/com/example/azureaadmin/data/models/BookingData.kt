@@ -97,7 +97,7 @@ data class RoomDetails(
     val description: String,
     val max_guests: Int,
     val amenities: List<Amenity>,
-    val average_rating: Int,
+    val average_rating: Double,
     val price_per_night: Double,
     val discounted_price_numeric: Double
 )
@@ -113,7 +113,7 @@ data class AreaDetails(
     val discounted_price: String?,
     val discount_percent: Int,
     val senior_discounted_price: Double,
-    val average_rating: Int,
+    val average_rating: Double,
     val price_per_hour_numeric: Double,
     val discounted_price_numeric: Double?
 )

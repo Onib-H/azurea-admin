@@ -3,7 +3,6 @@ package com.example.azureaadmin.data.remote
 import android.content.Context
 import com.example.azureaadmin.data.local.DataStoreManager
 import com.example.azureaadmin.utils.BASE_URL
-import com.example.azureaadmin.utils.EMULATOR_BASE_URL
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.Dispatchers

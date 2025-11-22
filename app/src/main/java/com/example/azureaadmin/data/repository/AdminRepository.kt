@@ -16,7 +16,14 @@ import com.example.azureaadmin.data.models.BookingDetailsResponse
 import com.example.azureaadmin.data.models.BookingResponse
 import com.example.azureaadmin.data.models.BookingStatusCounts
 import com.example.azureaadmin.data.models.BookingStatusResponse
+import com.example.azureaadmin.data.models.DailyBookingsResponse
+import com.example.azureaadmin.data.models.DailyCancellationsResponse
+import com.example.azureaadmin.data.models.DailyCheckInCheckoutResponse
+import com.example.azureaadmin.data.models.DailyNoShowRejectedResponse
+import com.example.azureaadmin.data.models.DailyRevenueResponse
 import com.example.azureaadmin.data.models.MessageResponse
+import com.example.azureaadmin.data.models.PropertyBookingResponse
+import com.example.azureaadmin.data.models.PropertyRevenueResponse
 import com.example.azureaadmin.data.models.RecordPaymentRequest
 import com.example.azureaadmin.data.models.RecordPaymentResponse
 import com.example.azureaadmin.data.models.RejectIdRequest
@@ -54,6 +61,78 @@ class AdminRepository(private val context: Context) {
 
     suspend fun checkSession(): Response<UserAuthResponse> {
         return api.checkSession()
+    }
+
+    // DASHBOARD
+
+    suspend fun getStats(month: Int, year: Int): Response<AdminStatsResponse> {
+        return api.getStats(month, year)
+    }
+
+    suspend fun getStatsForCurrentMonth(): Response<AdminStatsResponse> {
+        return api.getStatsForCurrentMonth()
+    }
+
+    suspend fun getBookingStatusCounts(month: Int, year: Int): Response<BookingStatusResponse> {
+        return api.getBookingStatusCounts(month, year)
+    }
+
+    suspend fun getBookingStatusCountsForCurrentMonth(): Response<BookingStatusResponse> {
+        val calendar = Calendar.getInstance()
+        val month = calendar.get(Calendar.MONTH) + 1
+        val year = calendar.get(Calendar.YEAR)
+        return getBookingStatusCounts(month, year)
+    }
+
+    fun mapBookingStatusToList(response: BookingStatusResponse): List<BookingStatusCounts> {
+        val total = response.pending + response.reserved + response.checked_in +
+                response.checked_out + response.cancelled + response.no_show + response.rejected
+
+        return listOf(
+            BookingStatusCounts("Pending", response.pending, if (total > 0) (response.pending.toFloat() / total) * 100 else 0f),
+            BookingStatusCounts("Reserved", response.reserved, if (total > 0) (response.reserved.toFloat() / total) * 100 else 0f),
+            BookingStatusCounts("Checked In", response.checked_in, if (total > 0) (response.checked_in.toFloat() / total) * 100 else 0f),
+            BookingStatusCounts("Checked Out", response.checked_out, if (total > 0) (response.checked_out.toFloat() / total) * 100 else 0f),
+            BookingStatusCounts("Cancelled", response.cancelled, if (total > 0) (response.cancelled.toFloat() / total) * 100 else 0f),
+            BookingStatusCounts("No Show", response.no_show, if (total > 0) (response.no_show.toFloat() / total) * 100 else 0f),
+            BookingStatusCounts("Rejected", response.rejected, if (total > 0) (response.rejected.toFloat() / total) * 100 else 0f)
+        )
+    }
+
+    suspend fun getDailyRevenue(): Response<DailyRevenueResponse> {
+        return api.getDailyRevenue()
+    }
+
+    suspend fun getDailyBookings(): Response<DailyBookingsResponse> {
+        return api.getDailyBookings()
+    }
+
+    suspend fun getDailyCancellations(): Response<DailyCancellationsResponse> {
+        return api.getDailyCancellations()
+    }
+
+    suspend fun getDailyCheckinsCheckouts(): Response<DailyCheckInCheckoutResponse> {
+        return api.getDailyCheckinsCheckouts()
+    }
+
+    suspend fun getDailyNoShowRejected(): Response<DailyNoShowRejectedResponse> {
+        return api.getDailyNoShowRejected()
+    }
+
+    suspend fun getRoomRevenue(): Response<PropertyRevenueResponse>{
+        return api.getRoomRevenue()
+    }
+
+    suspend fun getRoomBookings(): Response<PropertyBookingResponse>{
+        return api.getRoomBookings()
+    }
+
+    suspend fun getAreaRevenue(): Response<PropertyRevenueResponse>{
+        return api.getAreaRevenue()
+    }
+
+    suspend fun getAreaBookings(): Response<PropertyBookingResponse>{
+        return api.getAreaBookings()
     }
 
 
@@ -385,38 +464,6 @@ class AdminRepository(private val context: Context) {
         } else {
             throw Exception("Error deleting amenity: ${response.code()}")
         }
-    }
-
-    // DASHBOARD
-
-    suspend fun getStats(): Response<AdminStatsResponse> {
-        return api.getStats()
-    }
-
-    suspend fun getBookingStatusCounts(month: Int, year: Int): Response<BookingStatusResponse> {
-        return api.getBookingStatusCounts(month, year)
-    }
-
-    suspend fun getBookingStatusCountsForCurrentMonth(): Response<BookingStatusResponse> {
-        val calendar = Calendar.getInstance()
-        val month = calendar.get(Calendar.MONTH) + 1
-        val year = calendar.get(Calendar.YEAR)
-        return getBookingStatusCounts(month, year)
-    }
-
-    fun mapBookingStatusToList(response: BookingStatusResponse): List<BookingStatusCounts> {
-        val total = response.pending + response.reserved + response.checked_in +
-                response.checked_out + response.cancelled + response.no_show + response.rejected
-
-        return listOf(
-            BookingStatusCounts("Pending", response.pending, if (total > 0) (response.pending.toFloat() / total) * 100 else 0f),
-            BookingStatusCounts("Reserved", response.reserved, if (total > 0) (response.reserved.toFloat() / total) * 100 else 0f),
-            BookingStatusCounts("Checked In", response.checked_in, if (total > 0) (response.checked_in.toFloat() / total) * 100 else 0f),
-            BookingStatusCounts("Checked Out", response.checked_out, if (total > 0) (response.checked_out.toFloat() / total) * 100 else 0f),
-            BookingStatusCounts("Cancelled", response.cancelled, if (total > 0) (response.cancelled.toFloat() / total) * 100 else 0f),
-            BookingStatusCounts("No Show", response.no_show, if (total > 0) (response.no_show.toFloat() / total) * 100 else 0f),
-            BookingStatusCounts("Rejected", response.rejected, if (total > 0) (response.rejected.toFloat() / total) * 100 else 0f)
-        )
     }
 
     // Users
