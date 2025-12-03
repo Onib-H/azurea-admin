@@ -3,12 +3,17 @@ package com.example.azureaadmin.ui.screens.admin.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.azureaadmin.data.models.AdminStatsResponse
+import com.example.azureaadmin.data.models.AreaBookingResponse
+import com.example.azureaadmin.data.models.AreaRevenueResponse
 import com.example.azureaadmin.data.models.BookingStatusCounts
 import com.example.azureaadmin.data.models.DailyBookingsResponse
 import com.example.azureaadmin.data.models.DailyCancellationsResponse
 import com.example.azureaadmin.data.models.DailyCheckInCheckoutResponse
 import com.example.azureaadmin.data.models.DailyNoShowRejectedResponse
 import com.example.azureaadmin.data.models.DailyRevenueResponse
+import com.example.azureaadmin.data.models.MonthlyReportResponse
+import com.example.azureaadmin.data.models.RoomBookingResponse
+import com.example.azureaadmin.data.models.RoomRevenueResponse
 import com.example.azureaadmin.data.repository.AdminRepository
 import com.example.azureaadmin.utils.FormatPrice
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +30,7 @@ enum class DailyViewMode {
     DAY, WEEK, MONTH
 }
 
+
 data class StatWithTrend(
     val label: String,
     val value: String,
@@ -32,6 +38,15 @@ data class StatWithTrend(
     val trendValue: String
 )
 
+data class DailyAnalyticsTrends(
+    val revenueTrend: Pair<TrendType, String>,
+    val bookingsTrend: Pair<TrendType, String>,
+    val cancellationsTrend: Pair<TrendType, String>,
+    val checkInsTrend: Pair<TrendType, String>,
+    val checkOutsTrend: Pair<TrendType, String>,
+    val noShowsTrend: Pair<TrendType, String>,
+    val rejectedTrend: Pair<TrendType, String>
+)
 
 class DashboardViewModel(private val repository: AdminRepository) : ViewModel() {
 
@@ -44,6 +59,29 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
 
     private val _selectedMonth = MutableStateFlow(YearMonth.now())
     val selectedMonth: StateFlow<YearMonth> = _selectedMonth
+
+    // Room and Area Revenue data
+    private val _roomRevenue = MutableStateFlow<RoomRevenueResponse?>(null)
+    val roomRevenue: StateFlow<RoomRevenueResponse?> = _roomRevenue
+
+    private val _roomBookings = MutableStateFlow<RoomBookingResponse?>(null)
+    val roomBookings: StateFlow<RoomBookingResponse?> = _roomBookings
+
+    private val _areaRevenue = MutableStateFlow<AreaRevenueResponse?>(null)
+    val areaRevenue: StateFlow<AreaRevenueResponse?> = _areaRevenue
+
+    private val _areaBookings = MutableStateFlow<AreaBookingResponse?>(null)
+    val areaBookings: StateFlow<AreaBookingResponse?> = _areaBookings
+
+    // Monthly Report for PDF generation
+    private val _monthlyReport = MutableStateFlow<MonthlyReportResponse?>(null)
+    val monthlyReport: StateFlow<MonthlyReportResponse?> = _monthlyReport
+
+    private val _reportLoading = MutableStateFlow(false)
+    val reportLoading: StateFlow<Boolean> = _reportLoading
+
+    private val _reportError = MutableStateFlow<String?>(null)
+    val reportError: StateFlow<String?> = _reportError
 
     // Daily analytics (separate navigation)
     private val _selectedDate = MutableStateFlow(LocalDate.now())
@@ -69,6 +107,15 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
 
     private val _previousStats = MutableStateFlow<AdminStatsResponse?>(null)
     val previousStats: StateFlow<AdminStatsResponse?> = _previousStats
+
+    private val _previousDailyRevenue = MutableStateFlow<DailyRevenueResponse?>(null)
+    private val _previousDailyBookings = MutableStateFlow<DailyBookingsResponse?>(null)
+    private val _previousDailyCancellations = MutableStateFlow<DailyCancellationsResponse?>(null)
+    private val _previousDailyCheckInsCheckOuts = MutableStateFlow<DailyCheckInCheckoutResponse?>(null)
+    private val _previousDailyNoShowRejected = MutableStateFlow<DailyNoShowRejectedResponse?>(null)
+
+    private val _dailyAnalyticsTrends = MutableStateFlow<DailyAnalyticsTrends?>(null)
+    val dailyAnalyticsTrends: StateFlow<DailyAnalyticsTrends?> = _dailyAnalyticsTrends
 
     private val _statsWithTrends = MutableStateFlow<List<StatWithTrend>>(emptyList())
     val statsWithTrends: StateFlow<List<StatWithTrend>> = _statsWithTrends
@@ -104,6 +151,57 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
         fetchStats(month.monthValue, month.year)
         fetchPreviousMonthStats(month.monthValue, month.year)
         fetchBookingStatusCounts(month.monthValue, month.year)
+        fetchRoomAndAreaRevenue(month.monthValue, month.year)
+    }
+
+    private fun fetchRoomAndAreaRevenue(month: Int, year: Int) {
+        viewModelScope.launch {
+            try {
+                // Fetch Room Revenue and Bookings
+                val roomRevenueResp = repository.getRoomRevenue(month, year)
+                val roomBookingsResp = repository.getRoomBookings(month, year)
+
+                if (roomRevenueResp.isSuccessful) _roomRevenue.value = roomRevenueResp.body()
+                if (roomBookingsResp.isSuccessful) _roomBookings.value = roomBookingsResp.body()
+
+                // Fetch Area Revenue and Bookings
+                val areaRevenueResp = repository.getAreaRevenue(month, year)
+                val areaBookingsResp = repository.getAreaBookings(month, year)
+
+                if (areaRevenueResp.isSuccessful) _areaRevenue.value = areaRevenueResp.body()
+                if (areaBookingsResp.isSuccessful) _areaBookings.value = areaBookingsResp.body()
+
+            } catch (e: Exception) {
+                android.util.Log.e("DashboardVM", "Room/Area revenue error", e)
+            }
+        }
+    }
+
+    // Fetch monthly report for PDF generation
+    fun fetchMonthlyReport() {
+        viewModelScope.launch {
+            _reportLoading.value = true
+            _reportError.value = null
+            try {
+                val month = _selectedMonth.value
+                val response = repository.getMonthlyReport(month.monthValue, month.year)
+
+                if (response.isSuccessful && response.body() != null) {
+                    _monthlyReport.value = response.body()
+                } else {
+                    _reportError.value = "Failed to fetch report: ${response.code()}"
+                }
+            } catch (e: Exception) {
+                _reportError.value = "Report error: ${e.localizedMessage ?: "Unknown error"}"
+                android.util.Log.e("DashboardVM", "Monthly report error", e)
+            } finally {
+                _reportLoading.value = false
+            }
+        }
+    }
+
+    fun clearReportError() {
+        _reportError.value = null
     }
 
     // Daily navigation (for daily analytics only)
@@ -139,28 +237,28 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
         fetchDataForSelectedMonth()
     }
 
-
     fun fetchDailyData() {
         viewModelScope.launch {
             _dailyDataLoading.value = true
             try {
-                val revenueResp = repository.getDailyRevenue()
-                val bookingsResp = repository.getDailyBookings()
-                val cancellationsResp = repository.getDailyCancellations()
-                val checkInsResp = repository.getDailyCheckinsCheckouts()
-                val noShowResp = repository.getDailyNoShowRejected()
+                val month = _selectedDate.value.monthValue
+                val year = _selectedDate.value.year
 
-                logResponse("Revenue", revenueResp)
-                logResponse("Bookings", bookingsResp)
-                logResponse("Cancellations", cancellationsResp)
-                logResponse("Check-ins/outs", checkInsResp)
-                logResponse("No-shows/rejected", noShowResp)
+                // Fetch current month data
+                val revenueResp = repository.getDailyRevenue(month, year)
+                val bookingsResp = repository.getDailyBookings(month, year)
+                val cancellationsResp = repository.getDailyCancellations(month, year)
+                val checkInsResp = repository.getDailyCheckinsCheckouts(month, year)
+                val noShowResp = repository.getDailyNoShowRejected(month, year)
 
                 if (revenueResp.isSuccessful) _dailyRevenue.value = revenueResp.body()
                 if (bookingsResp.isSuccessful) _dailyBookings.value = bookingsResp.body()
                 if (cancellationsResp.isSuccessful) _dailyCancellations.value = cancellationsResp.body()
                 if (checkInsResp.isSuccessful) _dailyCheckInsCheckOuts.value = checkInsResp.body()
                 if (noShowResp.isSuccessful) _dailyNoShowRejected.value = noShowResp.body()
+
+                // Fetch previous month for trend comparison
+                fetchPreviousDailyData(month, year)
 
             } catch (e: Exception) {
                 android.util.Log.e("DashboardVM", "Daily data error", e)
@@ -170,17 +268,78 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
         }
     }
 
-    private fun <T> logResponse(label: String, response: retrofit2.Response<T>) {
-        if (response.isSuccessful) {
-            android.util.Log.d("DashboardVM", "$label Response: ${response.body()}")
-        } else {
-            android.util.Log.w("DashboardVM", "$label Failed: ${response.code()} - ${response.errorBody()?.string()}")
+    private suspend fun fetchPreviousDailyData(currentMonth: Int, currentYear: Int) {
+        try {
+            val (prevMonth, prevYear) = if (currentMonth == 1) {
+                Pair(12, currentYear - 1)
+            } else {
+                Pair(currentMonth - 1, currentYear)
+            }
+
+            val prevRevenueResp = repository.getDailyRevenue(prevMonth, prevYear)
+            val prevBookingsResp = repository.getDailyBookings(prevMonth, prevYear)
+            val prevCancellationsResp = repository.getDailyCancellations(prevMonth, prevYear)
+            val prevCheckInsResp = repository.getDailyCheckinsCheckouts(prevMonth, prevYear)
+            val prevNoShowResp = repository.getDailyNoShowRejected(prevMonth, prevYear)
+
+            if (prevRevenueResp.isSuccessful) _previousDailyRevenue.value = prevRevenueResp.body()
+            if (prevBookingsResp.isSuccessful) _previousDailyBookings.value = prevBookingsResp.body()
+            if (prevCancellationsResp.isSuccessful) _previousDailyCancellations.value = prevCancellationsResp.body()
+            if (prevCheckInsResp.isSuccessful) _previousDailyCheckInsCheckOuts.value = prevCheckInsResp.body()
+            if (prevNoShowResp.isSuccessful) _previousDailyNoShowRejected.value = prevNoShowResp.body()
+
+            // Calculate trends
+            calculateDailyAnalyticsTrends()
+
+        } catch (e: Exception) {
+            android.util.Log.e("DashboardVM", "Previous daily data error", e)
         }
     }
 
+    private fun calculateDailyAnalyticsTrends() {
+        val currentRevenue = _dailyRevenue.value
+        val previousRevenue = _previousDailyRevenue.value
+        val currentBookings = _dailyBookings.value
+        val previousBookings = _previousDailyBookings.value
+        val currentCancellations = _dailyCancellations.value
+        val previousCancellations = _previousDailyCancellations.value
+        val currentCheckIns = _dailyCheckInsCheckOuts.value
+        val previousCheckIns = _previousDailyCheckInsCheckOuts.value
+        val currentNoShow = _dailyNoShowRejected.value
+        val previousNoShow = _previousDailyNoShowRejected.value
 
+        // Calculate monthly totals
+        val currMonthRevenue = currentRevenue?.data?.take(currentRevenue.days_in_month)?.sum() ?: 0.0
+        val prevMonthRevenue = previousRevenue?.data?.take(previousRevenue.days_in_month)?.sum() ?: 0.0
 
+        val currMonthBookings = currentBookings?.data?.take(currentBookings.days_in_month)?.sum() ?: 0
+        val prevMonthBookings = previousBookings?.data?.take(previousBookings.days_in_month)?.sum() ?: 0
 
+        val currMonthCancellations = currentCancellations?.data?.take(currentCancellations.days_in_month)?.sum() ?: 0
+        val prevMonthCancellations = previousCancellations?.data?.take(previousCancellations.days_in_month)?.sum() ?: 0
+
+        val currMonthCheckIns = currentCheckIns?.checkins?.take(currentCheckIns.days_in_month)?.sum() ?: 0
+        val prevMonthCheckIns = previousCheckIns?.checkins?.take(previousCheckIns.days_in_month)?.sum() ?: 0
+
+        val currMonthCheckOuts = currentCheckIns?.checkouts?.take(currentCheckIns.days_in_month)?.sum() ?: 0
+        val prevMonthCheckOuts = previousCheckIns?.checkouts?.take(previousCheckIns.days_in_month)?.sum() ?: 0
+
+        val currMonthNoShows = currentNoShow?.no_shows?.take(currentNoShow.days_in_month)?.sum() ?: 0
+        val prevMonthNoShows = previousNoShow?.no_shows?.take(previousNoShow.days_in_month)?.sum() ?: 0
+
+        val currMonthRejected = currentNoShow?.rejected?.take(currentNoShow.days_in_month)?.sum() ?: 0
+        val prevMonthRejected = previousNoShow?.rejected?.take(previousNoShow.days_in_month)?.sum() ?: 0
+
+        _dailyAnalyticsTrends.value = DailyAnalyticsTrends(
+            revenueTrend = calculateTrend(currMonthRevenue, prevMonthRevenue),
+            bookingsTrend = calculateTrend(currMonthBookings.toDouble(), prevMonthBookings.toDouble()),
+            cancellationsTrend = calculateTrend(currMonthCancellations.toDouble(), prevMonthCancellations.toDouble()),
+            checkInsTrend = calculateTrend(currMonthCheckIns.toDouble(), prevMonthCheckIns.toDouble()),
+            checkOutsTrend = calculateTrend(currMonthCheckOuts.toDouble(), prevMonthCheckOuts.toDouble()),
+            noShowsTrend = calculateTrend(currMonthNoShows.toDouble(), prevMonthNoShows.toDouble()),
+            rejectedTrend = calculateTrend(currMonthRejected.toDouble(), prevMonthRejected.toDouble())
+        )
+    }
 
     private fun fetchStats(month: Int, year: Int) {
         viewModelScope.launch {
@@ -237,7 +396,7 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
                 val response = repository.getStats(previousMonth.first, previousMonth.second)
                 if (response.isSuccessful && response.body() != null) {
                     _previousStats.value = response.body()
-                    calculateTrends() // Calculate trends after fetching previous stats
+                    calculateTrends()
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DashboardVM", "Previous stats error", e)
@@ -251,11 +410,6 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
 
         val trends = mutableListOf<StatWithTrend>()
 
-        // Active Bookings Trend
-        val activeBookingsTrend = calculateTrend(
-            current = current.active_bookings.toDouble(),
-            previous = previous?.active_bookings?.toDouble()
-        )
         trends.add(
             StatWithTrend(
                 label = "Active Bookings",
@@ -265,20 +419,15 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
             )
         )
 
-        // Pending Bookings Trend
-        val pendingBookingsTrend = calculateTrend(
-            current = current.pending_bookings.toDouble(),
-            previous = previous?.pending_bookings?.toDouble()
-        )
         trends.add(
             StatWithTrend(
                 label = "Pending Bookings",
                 value = current.pending_bookings.toString(),
                 trend = null,
-                trendValue = ""            )
+                trendValue = ""
+            )
         )
 
-        // Total Bookings Trend
         val totalBookingsTrend = calculateTrend(
             current = current.total_bookings.toDouble(),
             previous = previous?.total_bookings?.toDouble()
@@ -292,7 +441,6 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
             )
         )
 
-        // Revenue Trend - Use the raw 'revenue' field (Double), not formatted_revenue
         val revenueTrend = calculateTrend(
             current = current.revenue,
             previous = previous?.revenue
@@ -300,7 +448,7 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
         trends.add(
             StatWithTrend(
                 label = "Monthly Revenue",
-                value = FormatPrice.formatRevenue(current.revenue.toString()), // Use the formatted string for display
+                value = FormatPrice.formatRevenue(current.revenue.toString()),
                 trend = revenueTrend.first,
                 trendValue = revenueTrend.second
             )
@@ -322,27 +470,21 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
             else -> TrendType.NEUTRAL
         }
 
-        // Format trend value with max 2 characters after sign (e.g., "+11%", "-8%", "+2%")
         val trendValue = when {
             percentageChange.absoluteValue >= 100 -> {
-                // For values >= 100, show without decimal
                 if (percentageChange >= 0) "+${percentageChange.toInt()}%"
                 else "${percentageChange.toInt()}%"
             }
             percentageChange.absoluteValue >= 10 -> {
-                // For 10-99, show whole number (e.g., "+11%", "-25%")
                 if (percentageChange >= 0) "+${percentageChange.toInt()}%"
                 else "${percentageChange.toInt()}%"
             }
             else -> {
-                // For < 10, show one decimal if needed (e.g., "+2%", "+8.5%")
                 val rounded = (percentageChange * 10).toInt() / 10.0
                 if (rounded == rounded.toInt().toDouble()) {
-                    // No decimal needed (e.g., 2.0 -> "2")
                     if (percentageChange >= 0) "+${rounded.toInt()}%"
                     else "${rounded.toInt()}%"
                 } else {
-                    // Keep one decimal (e.g., 8.5)
                     if (percentageChange >= 0) "+${"%.1f".format(rounded)}%"
                     else "${"%.1f".format(rounded)}%"
                 }
@@ -351,6 +493,4 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
 
         return Pair(trend, trendValue)
     }
-
-
 }

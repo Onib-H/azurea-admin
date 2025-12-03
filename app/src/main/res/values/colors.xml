@@ -9,6 +9,11 @@
     <color name="white">#FFFFFFFF</color>
     <color name="splash_background_top">#6A1B9A</color>
     <color name="splash_background_bottom">#1565C0</color>
-    <color name="splash_background_solid">#6A1B9A</color> <!-- solid fallback -->
+    <color name="splash_background_solid">#6A1B9A</color>
+    <color name="splash_text">#1A1A1A</color>
+    <color name="splash_bg">#F0F2F5</color>
+    <!-- 87% white -->
+
+
 
 </resources>

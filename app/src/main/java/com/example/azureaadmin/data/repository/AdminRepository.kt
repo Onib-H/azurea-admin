@@ -11,7 +11,9 @@ import com.example.azureaadmin.data.models.AmenityRequest
 import com.example.azureaadmin.data.models.ApproveIdRequest
 import com.example.azureaadmin.data.models.ApproveIdResponse
 import com.example.azureaadmin.data.models.Area
+import com.example.azureaadmin.data.models.AreaBookingResponse
 import com.example.azureaadmin.data.models.AreaDetail
+import com.example.azureaadmin.data.models.AreaRevenueResponse
 import com.example.azureaadmin.data.models.BookingDetailsResponse
 import com.example.azureaadmin.data.models.BookingResponse
 import com.example.azureaadmin.data.models.BookingStatusCounts
@@ -22,14 +24,15 @@ import com.example.azureaadmin.data.models.DailyCheckInCheckoutResponse
 import com.example.azureaadmin.data.models.DailyNoShowRejectedResponse
 import com.example.azureaadmin.data.models.DailyRevenueResponse
 import com.example.azureaadmin.data.models.MessageResponse
-import com.example.azureaadmin.data.models.PropertyBookingResponse
-import com.example.azureaadmin.data.models.PropertyRevenueResponse
+import com.example.azureaadmin.data.models.MonthlyReportResponse
 import com.example.azureaadmin.data.models.RecordPaymentRequest
 import com.example.azureaadmin.data.models.RecordPaymentResponse
 import com.example.azureaadmin.data.models.RejectIdRequest
 import com.example.azureaadmin.data.models.RejectIdResponse
 import com.example.azureaadmin.data.models.Room
+import com.example.azureaadmin.data.models.RoomBookingResponse
 import com.example.azureaadmin.data.models.RoomDetail
+import com.example.azureaadmin.data.models.RoomRevenueResponse
 import com.example.azureaadmin.data.models.UpdateBookingStatusRequest
 import com.example.azureaadmin.data.models.UpdateBookingStatusResponse
 import com.example.azureaadmin.data.models.UserAuthResponse
@@ -43,7 +46,6 @@ import retrofit2.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.util.Calendar
 
 class AdminRepository(private val context: Context) {
 
@@ -69,19 +71,9 @@ class AdminRepository(private val context: Context) {
         return api.getStats(month, year)
     }
 
-    suspend fun getStatsForCurrentMonth(): Response<AdminStatsResponse> {
-        return api.getStatsForCurrentMonth()
-    }
 
     suspend fun getBookingStatusCounts(month: Int, year: Int): Response<BookingStatusResponse> {
         return api.getBookingStatusCounts(month, year)
-    }
-
-    suspend fun getBookingStatusCountsForCurrentMonth(): Response<BookingStatusResponse> {
-        val calendar = Calendar.getInstance()
-        val month = calendar.get(Calendar.MONTH) + 1
-        val year = calendar.get(Calendar.YEAR)
-        return getBookingStatusCounts(month, year)
     }
 
     fun mapBookingStatusToList(response: BookingStatusResponse): List<BookingStatusCounts> {
@@ -99,40 +91,44 @@ class AdminRepository(private val context: Context) {
         )
     }
 
-    suspend fun getDailyRevenue(): Response<DailyRevenueResponse> {
-        return api.getDailyRevenue()
+    suspend fun getDailyRevenue(month: Int, year: Int): Response<DailyRevenueResponse> {
+        return api.getDailyRevenue(month, year)
     }
 
-    suspend fun getDailyBookings(): Response<DailyBookingsResponse> {
-        return api.getDailyBookings()
+    suspend fun getDailyBookings(month: Int, year: Int): Response<DailyBookingsResponse> {
+        return api.getDailyBookings(month, year)
     }
 
-    suspend fun getDailyCancellations(): Response<DailyCancellationsResponse> {
-        return api.getDailyCancellations()
+    suspend fun getDailyCancellations(month: Int, year: Int): Response<DailyCancellationsResponse> {
+        return api.getDailyCancellations(month, year)
     }
 
-    suspend fun getDailyCheckinsCheckouts(): Response<DailyCheckInCheckoutResponse> {
-        return api.getDailyCheckinsCheckouts()
+    suspend fun getDailyCheckinsCheckouts(month: Int, year: Int): Response<DailyCheckInCheckoutResponse> {
+        return api.getDailyCheckinsCheckouts(month, year)
     }
 
-    suspend fun getDailyNoShowRejected(): Response<DailyNoShowRejectedResponse> {
-        return api.getDailyNoShowRejected()
+    suspend fun getDailyNoShowRejected(month: Int, year: Int): Response<DailyNoShowRejectedResponse> {
+        return api.getDailyNoShowRejected(month, year)
     }
 
-    suspend fun getRoomRevenue(): Response<PropertyRevenueResponse>{
-        return api.getRoomRevenue()
+    suspend fun getRoomRevenue(month: Int, year: Int): Response<RoomRevenueResponse>{
+        return api.getRoomRevenue(month, year)
     }
 
-    suspend fun getRoomBookings(): Response<PropertyBookingResponse>{
-        return api.getRoomBookings()
+    suspend fun getRoomBookings(month: Int, year: Int): Response<RoomBookingResponse>{
+        return api.getRoomBookings(month, year)
     }
 
-    suspend fun getAreaRevenue(): Response<PropertyRevenueResponse>{
-        return api.getAreaRevenue()
+    suspend fun getAreaRevenue(month: Int, year: Int): Response<AreaRevenueResponse>{
+        return api.getAreaRevenue(month, year)
     }
 
-    suspend fun getAreaBookings(): Response<PropertyBookingResponse>{
-        return api.getAreaBookings()
+    suspend fun getAreaBookings(month: Int, year: Int): Response<AreaBookingResponse>{
+        return api.getAreaBookings(month, year)
+    }
+
+    suspend fun getMonthlyReport(month: Int, year: Int ): Response<MonthlyReportResponse>{
+        return api.getMonthlyReport(month, year)
     }
 
 

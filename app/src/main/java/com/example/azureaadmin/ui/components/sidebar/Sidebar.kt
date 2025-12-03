@@ -24,6 +24,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.azureaadmin.R
 
+
 @Composable
 fun Sidebar(
     selectedItem: String,
@@ -34,7 +35,7 @@ fun Sidebar(
         modifier = Modifier
             .fillMaxHeight()
             .width(240.dp)
-            .background(Color(0xFFF5F5F5))
+            .background(Color(0xFF6A1B9A))
             .padding(16.dp),
         verticalArrangement = Arrangement.Top
     ) {
@@ -67,3 +68,5 @@ fun Sidebar(
         SidebarItem("Logout", selectedItem, onClick = onItemClick, isLogout = true)
     }
 }
+
+

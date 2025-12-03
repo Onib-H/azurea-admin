@@ -138,8 +138,6 @@ fun AdminScreen(navController: NavController) {
                 )
             }
         ) { padding ->
-
-            // ✅ Switch content here
             Box(
                 modifier = Modifier
                     .fillMaxSize()

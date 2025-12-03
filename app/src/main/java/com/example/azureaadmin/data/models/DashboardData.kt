@@ -76,32 +76,35 @@ data class DailyNoShowRejectedResponse(
     val days_in_month: Int
 )
 
-data class PropertyRevenueResponse(
+data class RoomRevenueResponse(
     val room_names: List<String>,
     val revenue_data: List<Double>,
     val month: Int,
     val year: Int
 )
 
-data class PropertyBookingResponse(
+data class RoomBookingResponse(
     val room_names: List<String>,
     val booking_counts: List<Int>,
     val month: Int,
     val year: Int
 )
 
-
-data class ReportData(
-    val period: String,
-    val stats: Stats,
-    val bookingStatusCounts: BookingStatus,
-    val areaNames: List<String>,
-    val areaRevenueValues: List<Double>,
-    val areaBookingValues: List<Int>,
-    val roomNames: List<String>,
-    val roomRevenueValues: List<Double>,
-    val roomBookingValues: List<Int>
+// Data classes for Area revenue
+data class AreaRevenueResponse(
+    val area_names: List<String>,
+    val revenue_data: List<Double>,
+    val month: Int,
+    val year: Int
 )
+
+data class AreaBookingResponse(
+    val area_names: List<String>,
+    val booking_counts: List<Int>,
+    val month: Int,
+    val year: Int
+)
+
 
 data class Stats(
     val activeBookings: Int,
@@ -125,6 +128,20 @@ data class BookingStatus(
     val no_show: Int,
     val rejected: Int
 )
+
+data class MonthlyReportResponse(
+    val period: String,
+    val stats: Stats,
+    val bookingStatusCounts: BookingStatus,
+    val areaNames: List<String>,
+    val areaRevenueValues: List<Double>,
+    val areaBookingValues: List<Int>,
+    val roomNames: List<String>,
+    val roomRevenueValues: List<Double>,
+    val roomBookingValues: List<Int>
+)
+
+
 
 
 

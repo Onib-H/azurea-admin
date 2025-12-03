@@ -83,7 +83,6 @@ class UsersViewModel(private val repository: AdminRepository) : ViewModel() {
                 val response = repository.archiveUser(userId)
                 if (response.isSuccessful) {
                     _archiveSuccess.value = "User archived successfully"
-                    // Remove the user from the current list
                     _users.value = _users.value.filter { it.id != userId }
                     _archiveError.value = null
                 } else {
@@ -95,7 +94,6 @@ class UsersViewModel(private val repository: AdminRepository) : ViewModel() {
         }
     }
 
-    // Add method to clear messages
     fun clearArchiveMessages() {
         _archiveSuccess.value = null
         _archiveError.value = null

@@ -1,37 +1,40 @@
 package com.example.azureaadmin.ui.screens.admin.amenities
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.models.Amenity
 import com.example.azureaadmin.data.repository.AdminRepository
-import androidx.compose.material3.TextFieldDefaults
 import com.example.azureaadmin.ui.components.SearchFilterHeader
 import com.example.azureaadmin.ui.components.modals.DeleteItemDialog
 import com.example.azureaadmin.utils.BaseViewModelFactory
@@ -67,11 +70,11 @@ fun AmenitiesScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             // Header
             SearchFilterHeader(
-                title = "Manage Amenities",
-                searchPlaceholder = "Search amenities…",
+                title = "Amenities",
+                searchPlaceholder = "Search amenities",
                 searchQuery = searchQuery,
                 onSearchChange = { searchQuery = it },
-                onFilterClick = { /* TODO: open filter dialog */ },
+                onFilterClick = { },
                 showFilter = false
             )
 
@@ -88,46 +91,68 @@ fun AmenitiesScreen(
                                 strokeWidth = 3.dp
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Loading amenities…")
+                            Text("Loading amenities...")
                         }
                     }
 
                     error != null -> {
                         Column(
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
                                 imageVector = Icons.Outlined.ErrorOutline,
-                                contentDescription = "Error",
+                                contentDescription = null,
                                 modifier = Modifier.size(64.dp),
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(error ?: "Unknown error")
+                            Text(
+                                text = "Unable to load amenities",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = error ?: "Please check your connection",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(modifier = Modifier.height(24.dp))
                             Button(onClick = { viewModel.fetchAmenities() }) {
-                                Text("Try Again")
+                                Text("Retry")
                             }
                         }
                     }
 
                     filteredAmenities.isEmpty() -> {
                         Column(
-                            modifier = Modifier.align(Alignment.Center),
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(horizontal = 32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.List,
-                                contentDescription = "No amenities",
+                                contentDescription = null,
                                 modifier = Modifier.size(80.dp),
                                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(
-                                text = if (searchQuery.isEmpty()) "No amenities yet"
-                                else "No amenities match your search",
-                                style = MaterialTheme.typography.titleMedium
+                                text = if (searchQuery.isEmpty()) "No amenities added yet"
+                                else "No results found",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = if (searchQuery.isEmpty()) "Add your first amenity to get started"
+                                else "Try a different search term",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -203,19 +228,11 @@ fun AmenitiesScreen(
 
     DeleteItemDialog(
         show = showDeleteDialog,
-        itemLabel = "Amenity",
+        itemLabel = "amenity",
         onDismiss = { showDeleteDialog = false },
         onDelete = {
             selectedAmenity?.let { viewModel.deleteAmenity(it.id) }
             showDeleteDialog = false
         }
     )
-
-
 }
-
-
-
-
-
-

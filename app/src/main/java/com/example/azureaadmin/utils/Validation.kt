@@ -13,8 +13,13 @@ fun validateRoomInputs(
     val isRoom = inputs.containsKey("Room Type")
 
     // Name validation
-    if (inputs["Name"].isNullOrBlank()) {
-        errors["Name"] = "${if (isRoom) "Room" else "Area"} name is required"
+    val name = inputs["Name"]?.trim()
+    if (name.isNullOrBlank()) {
+        errors["Name"] = "Name is required"
+    } else if (name.length < 3) {
+        errors["Name"] = "Name must be at least 3 characters"
+    } else if (name.length > 50) {
+        errors["Name"] = "Name must not exceed 50 characters"
     }
 
     // Room Type validation (for rooms only)
@@ -28,38 +33,72 @@ fun validateRoomInputs(
     }
 
     // Capacity / Max Guests validation
-    val capacity = inputs["Capacity"]?.toIntOrNull()
-    if (capacity == null || capacity <= 0) {
-        errors["Capacity"] = "Valid ${if (isRoom) "max guests" else "capacity"} is required"
+    val capacityStr = inputs["Capacity"]?.trim()
+    if (capacityStr.isNullOrBlank()) {
+        errors["Capacity"] = "Capacity is required"
     } else {
-        if (isRoom && (capacity !in 1..100)) {
-            errors["Capacity"] = "Max guests must be between 1 and 10"
-        } else if (!isRoom && (capacity !in 1..500)) {
-            errors["Capacity"] = "Capacity must be between 1 and 500"
+        val capacity = capacityStr.toIntOrNull()
+        if (capacity == null) {
+            errors["Capacity"] = "Must be a valid number"
+        } else if (capacity <= 0) {
+            errors["Capacity"] = "Must be greater than 0"
+        } else if (isRoom && capacity > 10) {
+            errors["Capacity"] = "Max guests cannot exceed 10"
+        } else if (!isRoom && capacity > 500) {
+            errors["Capacity"] = "Capacity cannot exceed 500"
         }
     }
 
     // Price validation
-    val price = inputs["Price"]?.toDoubleOrNull()
-    if (price == null || price < 0) {
-        errors["Price"] = "Valid price is required"
+    val priceStr = inputs["Price"]?.trim()
+    if (priceStr.isNullOrBlank()) {
+        errors["Price"] = "Price is required"
     } else {
-        if (isRoom && price !in 1.0..50000.0) {
-            errors["Price"] = "Room price must be between ₱1 and ₱50,000"
-        } else if (!isRoom && price !in 1.0..10000.0) {
-            errors["Price"] = "Area price must be between ₱1 and ₱10,000"
+        val price = priceStr.toDoubleOrNull()
+        if (price == null) {
+            errors["Price"] = "Must be a valid amount"
+        } else if (price <= 0) {
+            errors["Price"] = "Must be greater than 0"
+        } else if (isRoom && price > 50000.0) {
+            errors["Price"] = "Cannot exceed ₱50,000"
+        } else if (!isRoom && price > 100000.0) {
+            errors["Price"] = "Cannot exceed ₱100,000"
+        }
+    }
+
+    // Description validation (optional)
+    val description = inputs["Description"]?.trim()
+    if (!description.isNullOrBlank()) {
+        if (description.length < 10) {
+            errors["Description"] = "Must be at least 10 characters"
+        } else if (description.length > 500) {
+            errors["Description"] = "Must not exceed 500 characters"
         }
     }
 
     // Discount validation (optional but must be valid if provided)
-    val discount = inputs["Discount"]?.toIntOrNull()
-    if (!inputs["Discount"].isNullOrBlank() && (discount == null || discount < 0 || discount > 100)) {
-        errors["Discount"] = "Discount must be between 0 and 99"
+    val discountStr = inputs["Discount"]?.trim()
+    if (!discountStr.isNullOrBlank()) {
+        val discount = discountStr.toIntOrNull()
+        if (discount == null) {
+            errors["Discount"] = "Must be a valid number"
+        } else if (discount < 0) {
+            errors["Discount"] = "Cannot be negative"
+        } else if (discount > 99) {
+            errors["Discount"] = "Cannot exceed 99%"
+        }
     }
 
     // Image validation
     if (selectedImageUris.isEmpty()) {
-        errors["Images"] = "At least one image is required"
+        errors["Images"] = "At least 1 image is required"
+    } else if (selectedImageUris.size > 10) {
+        errors["Images"] = "Maximum 10 images allowed"
+    }
+
+    // Amenities validation (for rooms only)
+    if (isRoom && selectedAmenities.isEmpty()) {
+        errors["Amenities"] = "Select at least 1 amenity"
     }
 
     return ValidationResult(errors.isEmpty(), errors)

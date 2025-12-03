@@ -7,9 +7,11 @@ import com.example.azureaadmin.data.models.AmenityRequest
 import com.example.azureaadmin.data.models.AmenityResponse
 import com.example.azureaadmin.data.models.ApproveIdRequest
 import com.example.azureaadmin.data.models.ApproveIdResponse
+import com.example.azureaadmin.data.models.AreaBookingResponse
 import com.example.azureaadmin.data.models.AreaDetailResponse
 import com.example.azureaadmin.data.models.AreaResponse
 import com.example.azureaadmin.data.models.AreaResponseSingle
+import com.example.azureaadmin.data.models.AreaRevenueResponse
 import com.example.azureaadmin.data.models.BookingDetailsResponse
 import com.example.azureaadmin.data.models.BookingResponse
 import com.example.azureaadmin.data.models.BookingStatusResponse
@@ -19,15 +21,16 @@ import com.example.azureaadmin.data.models.DailyCheckInCheckoutResponse
 import com.example.azureaadmin.data.models.DailyNoShowRejectedResponse
 import com.example.azureaadmin.data.models.DailyRevenueResponse
 import com.example.azureaadmin.data.models.MessageResponse
-import com.example.azureaadmin.data.models.PropertyBookingResponse
-import com.example.azureaadmin.data.models.PropertyRevenueResponse
+import com.example.azureaadmin.data.models.MonthlyReportResponse
 import com.example.azureaadmin.data.models.RecordPaymentRequest
 import com.example.azureaadmin.data.models.RecordPaymentResponse
 import com.example.azureaadmin.data.models.RejectIdRequest
 import com.example.azureaadmin.data.models.RejectIdResponse
+import com.example.azureaadmin.data.models.RoomBookingResponse
 import com.example.azureaadmin.data.models.RoomDetailResponse
 import com.example.azureaadmin.data.models.RoomResponse
 import com.example.azureaadmin.data.models.RoomResponseSingle
+import com.example.azureaadmin.data.models.RoomRevenueResponse
 import com.example.azureaadmin.data.models.UpdateBookingStatusRequest
 import com.example.azureaadmin.data.models.UpdateBookingStatusResponse
 import com.example.azureaadmin.data.models.UserAuthResponse
@@ -48,7 +51,7 @@ import retrofit2.http.Query
 interface AdminApiService {
 
     // api
-    @POST("api/auth/login")
+    @POST("api/auth/admin/login")
     suspend fun login(@Body request: AdminLoginRequest): Response<AdminLoginResponse>
 
     @POST("api/auth/logout")
@@ -73,8 +76,6 @@ interface AdminApiService {
         @Query("year") year: Int
     ): Response<AdminStatsResponse>
 
-    @GET("master/stats")
-    suspend fun getStatsForCurrentMonth(): Response<AdminStatsResponse>
 
     @GET("master/booking_status_counts")
     suspend fun getBookingStatusCounts(
@@ -83,31 +84,64 @@ interface AdminApiService {
     ): Response<BookingStatusResponse>
 
     @GET("master/daily_revenue")
-    suspend fun getDailyRevenue(): Response<DailyRevenueResponse>
+    suspend fun getDailyRevenue(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<DailyRevenueResponse>
 
     @GET("master/daily_bookings")
-    suspend fun getDailyBookings(): Response<DailyBookingsResponse>
+    suspend fun getDailyBookings(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<DailyBookingsResponse>
 
     @GET("master/daily_cancellations")
-    suspend fun getDailyCancellations(): Response<DailyCancellationsResponse>
+    suspend fun getDailyCancellations(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<DailyCancellationsResponse>
 
     @GET("master/daily_checkins_checkouts")
-    suspend fun getDailyCheckinsCheckouts(): Response<DailyCheckInCheckoutResponse>
+    suspend fun getDailyCheckinsCheckouts(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<DailyCheckInCheckoutResponse>
 
     @GET("master/daily_no_shows_rejected")
-    suspend fun getDailyNoShowRejected(): Response<DailyNoShowRejectedResponse>
+    suspend fun getDailyNoShowRejected(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<DailyNoShowRejectedResponse>
 
     @GET("master/room_revenue")
-    suspend fun getRoomRevenue(): Response<PropertyRevenueResponse>
+    suspend fun getRoomRevenue(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<RoomRevenueResponse>
 
     @GET("master/room_bookings")
-    suspend fun getRoomBookings(): Response<PropertyBookingResponse>
+    suspend fun getRoomBookings(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<RoomBookingResponse>
 
     @GET("master/area_revenue")
-    suspend fun getAreaRevenue(): Response<PropertyRevenueResponse>
+    suspend fun getAreaRevenue(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<AreaRevenueResponse>
 
     @GET("master/area_bookings")
-    suspend fun getAreaBookings(): Response<PropertyBookingResponse>
+    suspend fun getAreaBookings(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<AreaBookingResponse>
+
+    @GET("master/generate_monthly_report")
+    suspend fun getMonthlyReport(
+        @Query("month") month: Int,
+        @Query("year") year: Int
+    ): Response<MonthlyReportResponse>
 
     // Booking
 
