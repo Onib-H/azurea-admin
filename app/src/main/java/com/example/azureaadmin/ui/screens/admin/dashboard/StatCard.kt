@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingDown
-import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
@@ -119,7 +118,8 @@ fun StatCard(
 
 @Composable
 private fun TrendBadge(trend: TrendType?, value: String) {
-    if (value.isEmpty() || trend == null) return
+    // Don't show badge if value is empty or "0%"
+    if (value.isEmpty() || value == "0%" || value == "+0%" || value == "-0%" || trend == null) return
 
     val (backgroundColor, textColor, trendIcon) = when (trend) {
         TrendType.UP -> Triple(
@@ -132,11 +132,7 @@ private fun TrendBadge(trend: TrendType?, value: String) {
             Color(0xFFDC2626),
             Icons.AutoMirrored.Filled.TrendingDown
         )
-        TrendType.NEUTRAL -> Triple(
-            Color(0xFFF3F4F6),
-            Color(0xFF6B7280),
-            Icons.AutoMirrored.Filled.TrendingFlat
-        )
+        TrendType.NEUTRAL -> return // Don't show neutral trends
     }
 
     Row(

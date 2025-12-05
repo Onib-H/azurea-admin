@@ -4,6 +4,10 @@ import android.content.Context
 import android.print.PrintManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +51,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.repository.AdminRepository
 import com.example.azureaadmin.utils.BaseViewModelFactory
@@ -96,6 +99,9 @@ fun DashboardScreen(repository: AdminRepository) {
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     var isRefreshInProgress by remember { mutableStateOf(false) }
+    var showBlackout by remember { mutableStateOf(false) }
+    var showMonthChangeSkeleton by remember { mutableStateOf(false) }
+    var previousMonth by remember { mutableStateOf(selectedMonth) }
     var showDatePicker by remember { mutableStateOf(false) }
     val pullState = rememberPullToRefreshState()
 
@@ -105,6 +111,30 @@ fun DashboardScreen(repository: AdminRepository) {
     LaunchedEffect(Unit) {
         viewModel.fetchDataForSelectedMonth()
         viewModel.fetchDailyData()
+    }
+
+    // Detect month change and show skeleton
+    LaunchedEffect(selectedMonth) {
+        if (selectedMonth != previousMonth && previousMonth != null) {
+            showMonthChangeSkeleton = true
+            previousMonth = selectedMonth
+        }
+    }
+
+    // Hide skeleton when data is loaded (independent check)
+    LaunchedEffect(loading, stats) {
+        // Only hide if we're showing skeleton AND not loading AND have stats
+        if (showMonthChangeSkeleton && !loading && stats != null) {
+            delay(300) // Brief delay to ensure smooth transition
+            showMonthChangeSkeleton = false
+        }
+    }
+
+    // Initial load check - don't show skeleton on first render if data exists
+    LaunchedEffect(Unit) {
+        if (stats != null) {
+            showMonthChangeSkeleton = false
+        }
     }
 
     val onRefresh: () -> Unit = {
@@ -117,6 +147,11 @@ fun DashboardScreen(repository: AdminRepository) {
                     delay(300)
                     viewModel.fetchDailyData()
                     delay(600)
+
+                    // Blackout effect
+                    showBlackout = true
+                    delay(150) // Blackout duration
+                    showBlackout = false
                 } finally {
                     isRefreshing = false
                     isRefreshInProgress = false
@@ -128,16 +163,7 @@ fun DashboardScreen(repository: AdminRepository) {
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             loading && stats == null -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Loading dashboard data…")
-                    }
-                }
+                DashboardSkeleton()
             }
 
             error != null && stats == null -> {
@@ -165,129 +191,146 @@ fun DashboardScreen(repository: AdminRepository) {
             stats != null -> {
                 Box(modifier = Modifier.fillMaxSize()) {
 
-                    PullToRefreshBox(
-                        state = pullState,
-                        isRefreshing = isRefreshing,
-                        onRefresh = onRefresh,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(bottom = 16.dp),
-                            contentPadding = PaddingValues(
-                                top = 8.dp,
-                                bottom = 80.dp
-                            )
+                    // Show skeleton when month is changing
+                    if (showMonthChangeSkeleton) {
+                        DashboardSkeleton()
+                    } else {
+                        // Regular content with blackout overlay
+                        AnimatedVisibility(
+                            visible = !showBlackout,
+                            enter = fadeIn(animationSpec = tween(200)),
+                            exit = fadeOut(animationSpec = tween(150))
                         ) {
-                            item { Spacer(modifier = Modifier.height(60.dp)) }
-
-                            item {
-                                Column(
+                            PullToRefreshBox(
+                                state = pullState,
+                                isRefreshing = isRefreshing,
+                                onRefresh = onRefresh,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                LazyColumn(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp)
+                                        .fillMaxSize()
+                                        .padding(bottom = 16.dp),
+                                    contentPadding = PaddingValues(
+                                        bottom = 80.dp
+                                    )
                                 ) {
-                                    if (statsWithTrends.isNotEmpty()) {
-                                        statsWithTrends.chunked(2).forEach { rowItems ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(bottom = 12.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                            ) {
-                                                rowItems.forEach { stat ->
-                                                    StatCardWithTrend(
-                                                        label = stat.label,
-                                                        value = stat.value,
-                                                        trendType = stat.trend,
-                                                        trendValue = stat.trendValue,
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                }
-                                                if (rowItems.size == 1) {
-                                                    Spacer(modifier = Modifier.weight(1f))
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        val items = listOf(
-                                            "Active Bookings" to stats!!.active_bookings.toString(),
-                                            "Pending Bookings" to stats!!.pending_bookings.toString(),
-                                            "Total Bookings" to stats!!.total_bookings.toString(),
-                                            "Monthly Revenue" to stats!!.formatted_revenue
-                                        )
 
-                                        items.chunked(2).forEach { rowItems ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(bottom = 12.dp),
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                            ) {
-                                                rowItems.forEach { (label, value) ->
-                                                    SimpleStatCard(
-                                                        label = label,
-                                                        value = value,
-                                                        modifier = Modifier.weight(1f)
-                                                    )
+                                    item {
+                                        MonthNavigationHeader(
+                                            selectedMonth = selectedMonth,
+                                            onMonthSelected = { viewModel.selectMonth(it) },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color.White)
+                                        )
+                                    }
+
+                                    item {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp)
+                                        ) {
+                                            if (statsWithTrends.isNotEmpty()) {
+                                                statsWithTrends.chunked(2).forEach { rowItems ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(bottom = 12.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                    ) {
+                                                        rowItems.forEach { stat ->
+                                                            StatCardWithTrend(
+                                                                label = stat.label,
+                                                                value = stat.value,
+                                                                trendType = stat.trend,
+                                                                trendValue = stat.trendValue,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                        }
+                                                        if (rowItems.size == 1) {
+                                                            Spacer(modifier = Modifier.weight(1f))
+                                                        }
+                                                    }
                                                 }
-                                                if (rowItems.size == 1) {
-                                                    Spacer(modifier = Modifier.weight(1f))
+                                            } else {
+                                                val items = listOf(
+                                                    "Active Bookings" to stats!!.active_bookings.toString(),
+                                                    "Pending Bookings" to stats!!.pending_bookings.toString(),
+                                                    "Total Bookings" to stats!!.total_bookings.toString(),
+                                                    "Monthly Revenue" to stats!!.formatted_revenue
+                                                )
+
+                                                items.chunked(2).forEach { rowItems ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(bottom = 12.dp),
+                                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                    ) {
+                                                        rowItems.forEach { (label, value) ->
+                                                            SimpleStatCard(
+                                                                label = label,
+                                                                value = value,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                        }
+                                                        if (rowItems.size == 1) {
+                                                            Spacer(modifier = Modifier.weight(1f))
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                            }
 
-                            item {
-                                DailyOperationsDashboard(
-                                    selectedDate = selectedDate,
-                                    viewMode = dailyViewMode,
-                                    dailyRevenue = dailyRevenue,
-                                    dailyBookings = dailyBookings,
-                                    dailyCancellations = dailyCancellations,
-                                    dailyCheckIns = dailyCheckIns,
-                                    dailyNoShow = dailyNoShow,
-                                    trends = dailyAnalyticsTrends,
-                                    onViewModeChange = { viewModel.setDailyViewMode(it) },
-                                    onPreviousClick = { viewModel.navigateDailyPrevious() },
-                                    onNextClick = { viewModel.navigateDailyNext() },
-                                    onDateSelected = { viewModel.selectDate(it) }
-                                )
-                            }
+                                    item {
+                                        DailyOperationsDashboard(
+                                            selectedDate = selectedDate,
+                                            viewMode = dailyViewMode,
+                                            dailyRevenue = dailyRevenue,
+                                            dailyBookings = dailyBookings,
+                                            dailyCancellations = dailyCancellations,
+                                            dailyCheckIns = dailyCheckIns,
+                                            dailyNoShow = dailyNoShow,
+                                            trends = dailyAnalyticsTrends,
+                                            onViewModeChange = { viewModel.setDailyViewMode(it) },
+                                            onPreviousClick = { viewModel.navigateDailyPrevious() },
+                                            onNextClick = { viewModel.navigateDailyNext() },
+                                            onDateSelected = { viewModel.selectDate(it) }
+                                        )
+                                    }
 
-                            item {
-                                RankedRevenueDashboard(
-                                    roomRevenue = roomRevenue,
-                                    roomBookings = roomBookings,
-                                    areaRevenue = areaRevenue,
-                                    areaBookings = areaBookings
-                                )
-                            }
+                                    item {
+                                        RankedRevenueDashboard(
+                                            roomRevenue = roomRevenue,
+                                            roomBookings = roomBookings,
+                                            areaRevenue = areaRevenue,
+                                            areaBookings = areaBookings
+                                        )
+                                    }
 
-                            if (bookingStatusCounts != null && bookingStatusCounts!!.isNotEmpty()) {
-                                item {
-                                    BookingStatusPieChartComposeCharts(
-                                        counts = bookingStatusCounts!!,
-                                        selectedMonth = selectedMonth
-                                    )
+                                    if (bookingStatusCounts != null && bookingStatusCounts!!.isNotEmpty()) {
+                                        item {
+                                            BookingStatusPieChart(
+                                                counts = bookingStatusCounts!!,
+                                                selectedMonth = selectedMonth
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
 
-                    // Sticky header
-                    MonthNavigationHeader(
-                        selectedMonth = selectedMonth,
-                        onMonthSelected = { viewModel.selectMonth(it) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White)
-                            .zIndex(10f)
-                            .align(Alignment.TopCenter)
-                    )
+                        // Blackout overlay
+                        if (showBlackout) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                            )
+                        }
+                    }
 
                     // FAB for report
                     FloatingActionButton(
@@ -310,15 +353,6 @@ fun DashboardScreen(repository: AdminRepository) {
                     }
                 }
             }
-
-            else -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No data available")
-                }
-            }
         }
 
         // Report loading dialog
@@ -326,7 +360,7 @@ fun DashboardScreen(repository: AdminRepository) {
             Dialog(onDismissRequest = {}) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surface
+                    color = Color.White
                 ) {
                     Column(
                         modifier = Modifier.padding(32.dp),
@@ -367,7 +401,6 @@ fun DashboardScreen(repository: AdminRepository) {
 
                 val html = generateReportHTML(monthlyReport!!)
 
-                // Create WebView properly
                 val tempWebView = WebView(context).apply {
                     settings.javaScriptEnabled = false
                     settings.domStorageEnabled = true
@@ -386,18 +419,16 @@ fun DashboardScreen(repository: AdminRepository) {
                             null
                         )
 
-                        // Avoid multiple triggers
                         tempWebView.stopLoading()
                     }
                 }
 
-                // Load HTML
                 tempWebView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-
-                // Hide preview (your design choice)
                 showReportPreview = false
             }
         }
-
     }
 }
+
+
+

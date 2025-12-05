@@ -175,15 +175,6 @@ import com.example.azureaadmin.data.repository.AdminRepository
                     )
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "Forgot password?",
-                    color = Color(0xFF6A1B9A),
-                    fontSize = 14.sp,
-                    modifier = Modifier.align(Alignment.End)
-                )
-
                 Spacer(modifier = Modifier.height(16.dp))
 
 

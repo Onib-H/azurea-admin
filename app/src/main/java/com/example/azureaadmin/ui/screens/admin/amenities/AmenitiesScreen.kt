@@ -1,5 +1,6 @@
 package com.example.azureaadmin.ui.screens.admin.amenities
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,31 +16,39 @@ import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.models.Amenity
 import com.example.azureaadmin.data.repository.AdminRepository
-import com.example.azureaadmin.ui.components.SearchFilterHeader
+import com.example.azureaadmin.ui.components.filters.SearchFilterHeader
 import com.example.azureaadmin.ui.components.modals.DeleteItemDialog
 import com.example.azureaadmin.utils.BaseViewModelFactory
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
+// AmenitiesScreen.kt - Add blackout effect after refresh
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AmenitiesScreen(
     repository: AdminRepository,
@@ -50,27 +59,51 @@ fun AmenitiesScreen(
     val error by viewModel.error.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
-
-    // 🔹 Dialog states
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var selectedAmenity by remember { mutableStateOf<Amenity?>(null) }
 
+    // Pull-to-refresh states
+    val scope = rememberCoroutineScope()
+    var isRefreshing by remember { mutableStateOf(false) }
+    var isRefreshInProgress by remember { mutableStateOf(false) }
+    val pullState = rememberPullToRefreshState()
+
+    // Blackout overlay
+    var showBlackout by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) { viewModel.fetchAmenities() }
 
-    // Filtered list based on search query
     val filteredAmenities = if (searchQuery.isBlank()) {
         amenities
     } else {
         amenities.filter { it.description.contains(searchQuery, ignoreCase = true) }
     }
 
+    val onRefresh = {
+        if (!isRefreshInProgress) {
+            scope.launch {
+                isRefreshInProgress = true
+                isRefreshing = true
+
+                viewModel.fetchAmenities()
+                delay(300)
+
+                showBlackout = true
+                delay(150)
+                showBlackout = false
+
+                isRefreshing = false
+                isRefreshInProgress = false
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Header
             SearchFilterHeader(
-                title = "Amenities",
+                title = "Manage Amenities",
                 searchPlaceholder = "Search amenities",
                 searchQuery = searchQuery,
                 onSearchChange = { searchQuery = it },
@@ -78,116 +111,126 @@ fun AmenitiesScreen(
                 showFilter = false
             )
 
-            // Content
-            Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    loading -> {
-                        Column(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(48.dp),
-                                strokeWidth = 3.dp
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Loading amenities...")
-                        }
-                    }
-
-                    error != null -> {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Unable to load amenities",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = error ?: "Please check your connection",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Button(onClick = { viewModel.fetchAmenities() }) {
-                                Text("Retry")
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !showBlackout,
+                enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)),
+                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(150))
+            ) {
+                PullToRefreshBox(
+                    state = pullState,
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when {
+                            loading && amenities.isEmpty() -> {
+                                AmenitySkeleton()
                             }
-                        }
-                    }
 
-                    filteredAmenities.isEmpty() -> {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .padding(horizontal = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.List,
-                                contentDescription = null,
-                                modifier = Modifier.size(80.dp),
-                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = if (searchQuery.isEmpty()) "No amenities added yet"
-                                else "No results found",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = if (searchQuery.isEmpty()) "Add your first amenity to get started"
-                                else "Try a different search term",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                top = 8.dp,
-                                bottom = 80.dp
-                            )
-                        ) {
-                            items(
-                                items = filteredAmenities,
-                                key = { it.id }
-                            ) { amenity ->
-                                AmenityCard(
-                                    amenity = amenity,
-                                    onEditClick = {
-                                        selectedAmenity = amenity
-                                        showEditDialog = true
-                                    },
-                                    onDeleteClick = {
-                                        selectedAmenity = amenity
-                                        showDeleteDialog = true
+                            error != null && amenities.isEmpty() -> {
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(horizontal = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.ErrorOutline,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(64.dp),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Unable to load amenities",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = error ?: "Please check your connection",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Button(onClick = { viewModel.fetchAmenities() }) {
+                                        Text("Retry")
                                     }
-                                )
+                                }
+                            }
+
+                            filteredAmenities.isEmpty() -> {
+                                Column(
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(horizontal = 32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.List,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(80.dp),
+                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = if (searchQuery.isEmpty()) "No amenities added yet"
+                                        else "No results found",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = if (searchQuery.isEmpty()) "Add your first amenity to get started"
+                                        else "Try a different search term",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(
+                                        top = 8.dp,
+                                        bottom = 80.dp
+                                    )
+                                ) {
+                                    items(
+                                        items = filteredAmenities,
+                                        key = { it.id }
+                                    ) { amenity ->
+                                        AmenityCard(
+                                            amenity = amenity,
+                                            onEditClick = {
+                                                selectedAmenity = amenity
+                                                showEditDialog = true
+                                            },
+                                            onDeleteClick = {
+                                                selectedAmenity = amenity
+                                                showDeleteDialog = true
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
+
+            if (showBlackout) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.35f))
+                        .zIndex(10f)
+                )
+            }
         }
 
-        // 🔹 FAB to add
         FloatingActionButton(
             onClick = { showAddDialog = true },
             containerColor = MaterialTheme.colorScheme.primary,
@@ -205,6 +248,7 @@ fun AmenitiesScreen(
         }
     }
 
+    // Dialogs remain the same...
     AddAmenityDialog(
         show = showAddDialog,
         onDismiss = { showAddDialog = false },

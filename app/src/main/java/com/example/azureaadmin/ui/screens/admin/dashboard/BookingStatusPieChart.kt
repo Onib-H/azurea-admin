@@ -47,7 +47,7 @@ import kotlin.math.roundToInt
 
 
 @Composable
-fun BookingStatusPieChartComposeCharts(counts: List<BookingStatusCounts>, selectedMonth: YearMonth) {
+fun BookingStatusPieChart(counts: List<BookingStatusCounts>, selectedMonth: YearMonth) {
 
     val statusColorMap = mapOf(
         "Pending" to Color(0xFFFFC107),

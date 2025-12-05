@@ -1,5 +1,9 @@
 package com.example.azureaadmin.ui.screens.admin.bookings
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,24 +19,33 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.repository.AdminRepository
-import com.example.azureaadmin.ui.components.SearchFilterHeader
+import com.example.azureaadmin.ui.components.filters.SearchFilterHeader
 import com.example.azureaadmin.utils.BaseViewModelFactory
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BookingsScreen(
     repository: AdminRepository
@@ -45,6 +58,15 @@ fun BookingsScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedBookingId by remember { mutableStateOf<Int?>(null) }
+
+    // Pull to refresh
+    val pullState = rememberPullToRefreshState()
+    val scope = rememberCoroutineScope()
+    var isRefreshing by remember { mutableStateOf(false) }
+    var isRefreshInProgress by remember { mutableStateOf(false) }
+
+    // Blackout overlay (same as dashboard)
+    var showBlackout by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.fetchBookings()
@@ -61,41 +83,90 @@ fun BookingsScreen(
         }
     }
 
+    val onRefresh = {
+        if (!isRefreshInProgress) {
+            scope.launch {
+                isRefreshInProgress = true
+                isRefreshing = true
+
+                viewModel.fetchBookings()
+                delay(300)
+
+                // Same blackout pattern as dashboard
+                showBlackout = true
+                delay(150)
+                showBlackout = false
+
+                isRefreshing = false
+                isRefreshInProgress = false
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+
         SearchFilterHeader(
             title = "Manage Bookings",
             searchPlaceholder = "Search bookings…",
             searchQuery = searchQuery,
             onSearchChange = { searchQuery = it },
-            onFilterClick = { /* optional later */ },
+            onFilterClick = { },
+            showFilter = false
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
-            when {
-                loading && bookings.isEmpty() -> LoadingState()
-                error != null && bookings.isEmpty() -> ErrorState(error, onRetry = { viewModel.fetchBookings() })
-                filteredBookings.isEmpty() -> EmptyState(searchQuery)
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
-                    ) {
-                        items(
-                            items = filteredBookings,
-                            key = { it.id }
-                        ) { booking ->
-                            BookingCard(
-                                booking = booking,
-                                onViewClick = { selectedBookingId = booking.id }
-                            )
+
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !showBlackout,
+                enter = fadeIn(animationSpec = tween(200)),
+                exit = fadeOut(animationSpec = tween(150))
+            ) {
+                PullToRefreshBox(
+                    modifier = Modifier.fillMaxSize(),
+                    state = pullState,
+                    isRefreshing = isRefreshing,
+                    onRefresh = onRefresh
+                ) {
+                    val showSkeleton = loading && bookings.isEmpty()
+
+                    when {
+                        showSkeleton -> BookingSkeleton()
+
+                        error != null && bookings.isEmpty() ->
+                            ErrorState(error, onRetry = { viewModel.fetchBookings() })
+
+                        filteredBookings.isEmpty() ->
+                            EmptyState(searchQuery)
+
+                        else -> {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                            ) {
+                                items(filteredBookings, key = { it.id }) { booking ->
+                                    BookingCard(
+                                        booking = booking,
+                                        onViewClick = { selectedBookingId = booking.id }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
+
+            if (showBlackout) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.35f))
+                        .zIndex(10f)
+                )
+            }
         }
     }
 
-    // Show dialog when booking is selected
+
     selectedBookingId?.let { bookingId ->
         BookingDetailsDialog(
             bookingId = bookingId,
@@ -104,6 +175,8 @@ fun BookingsScreen(
         )
     }
 }
+
+
 
 @Composable
 fun LoadingState() {

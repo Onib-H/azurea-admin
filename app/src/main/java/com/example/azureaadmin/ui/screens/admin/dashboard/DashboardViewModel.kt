@@ -458,11 +458,17 @@ class DashboardViewModel(private val repository: AdminRepository) : ViewModel() 
     }
 
     private fun calculateTrend(current: Double, previous: Double?): Pair<TrendType, String> {
+        // If no previous data, return empty trend (no display)
         if (previous == null || previous == 0.0) {
-            return Pair(TrendType.NEUTRAL, "0%")
+            return Pair(TrendType.NEUTRAL, "")
         }
 
         val percentageChange = ((current - previous) / previous) * 100
+
+        // If change is negligible (less than 0.5%), return empty trend
+        if (percentageChange.absoluteValue < 0.5) {
+            return Pair(TrendType.NEUTRAL, "")
+        }
 
         val trend = when {
             percentageChange > 0.5 -> TrendType.UP

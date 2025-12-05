@@ -88,6 +88,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.absoluteValue
 
 
 private object DashboardConstants {
@@ -136,6 +137,33 @@ private data class MonthTotals(
                 checkIns == 0 && checkOuts == 0 && noShows == 0 && rejected == 0
 }
 
+private fun shouldShowTrend(trend: Pair<TrendType, String>?): Boolean {
+    if (trend == null) return false
+    // Don't show if neutral or if value is empty/zero
+    if (trend.first == TrendType.NEUTRAL) return false
+    val cleanValue = trend.second.replace("+", "").replace("-", "").replace("%", "").trim()
+    val numValue = cleanValue.toDoubleOrNull() ?: 0.0
+    return numValue != 0.0
+}
+
+private fun allTrendsEmpty(trends: DailyAnalyticsTrends?): Boolean {
+    if (trends == null) return true
+
+    val list = listOf(
+        trends.revenueTrend,
+        trends.bookingsTrend,
+        trends.cancellationsTrend,
+        trends.checkInsTrend,
+        trends.checkOutsTrend,
+        trends.noShowsTrend,
+        trends.rejectedTrend
+    )
+
+    return list.all { trend ->
+        trend == null || !shouldShowTrend(trend)
+    }
+}
+
 
 @Composable
 private fun getMetricStyle(type: DailyMetricType): Pair<ImageVector, Color> {
@@ -174,6 +202,9 @@ fun DailyOperationsDashboard(
         initialSelectedDateMillis = selectedDate.toEpochDay() * DashboardConstants.MILLIS_PER_DAY
     )
 
+    // Check if data is actually loading (null means not fetched yet)
+    val isLoading = dailyRevenue == null && dailyBookings == null
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -185,7 +216,6 @@ fun DailyOperationsDashboard(
             onPreviousClick = onPreviousClick,
             onNextClick = onNextClick,
             onDateClick = {
-                // Show different picker based on view mode
                 if (viewMode == DailyViewMode.MONTH) {
                     showMonthYearPicker = true
                 } else {
@@ -197,32 +227,38 @@ fun DailyOperationsDashboard(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        AnimatedContent(
-            targetState = viewMode,
-            label = "view_mode_transition"
-        ) { mode ->
-            when (mode) {
-                DailyViewMode.DAY -> DayContent(
-                    selectedDate = selectedDate,
-                    revenue = dailyRevenue,
-                    bookings = dailyBookings,
-                    cancellations = dailyCancellations,
-                    checkIns = dailyCheckIns,
-                    noShow = dailyNoShow
-                )
-                DailyViewMode.MONTH -> MonthContent(
-                    revenue = dailyRevenue,
-                    bookings = dailyBookings,
-                    cancellations = dailyCancellations,
-                    checkIns = dailyCheckIns,
-                    noShow = dailyNoShow,
-                    trends = trends
-                )
-                else -> Unit
+        // Show skeleton while data hasn't been fetched yet (null)
+        if (isLoading) {
+            DailyOperationsSkeleton(viewMode = viewMode)
+        } else {
+            AnimatedContent(
+                targetState = viewMode,
+                label = "view_mode_transition"
+            ) { mode ->
+                when (mode) {
+                    DailyViewMode.DAY -> DayContent(
+                        selectedDate = selectedDate,
+                        revenue = dailyRevenue,
+                        bookings = dailyBookings,
+                        cancellations = dailyCancellations,
+                        checkIns = dailyCheckIns,
+                        noShow = dailyNoShow
+                    )
+                    DailyViewMode.MONTH -> MonthContent(
+                        revenue = dailyRevenue,
+                        bookings = dailyBookings,
+                        cancellations = dailyCancellations,
+                        checkIns = dailyCheckIns,
+                        noShow = dailyNoShow,
+                        trends = trends
+                    )
+                    else -> Unit
+                }
             }
         }
     }
 
+    // Date pickers remain the same...
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -307,6 +343,7 @@ fun DailyOperationsDashboard(
         )
     }
 }
+
 
 @Composable
 private fun DashboardHeader(
@@ -549,6 +586,9 @@ private fun MonthContent(
         return
     }
 
+    // 🔍 Determine if ANY trends actually have value
+    val hasMeaningfulTrends = !allTrendsEmpty(trends)
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -559,9 +599,9 @@ private fun MonthContent(
                 else (totals.revenue / daysInMonth).toString()
             ),
             label = if (showTotal) "Monthly Revenue" else "Daily Average Revenue",
-            trend = if (showTotal) trends?.revenueTrend else null,
-            contextText = if (showTotal) "vs previous month" else null,
-            showTrendIcon = showTotal
+            trend = if (showTotal && hasMeaningfulTrends) trends?.revenueTrend else null,
+            contextText = if (showTotal && hasMeaningfulTrends) "vs previous month" else null,
+            showTrendIcon = showTotal && hasMeaningfulTrends
         )
 
         MetricViewToggle(
@@ -573,11 +613,12 @@ private fun MonthContent(
             metrics = if (showTotal)
                 createTotalMetrics(totals, trends)
             else createAverageMetrics(totals, daysInMonth),
-            contextText = if (showTotal) "vs previous month" else null,
-            showTrendIcons = showTotal
+            contextText = if (showTotal && hasMeaningfulTrends) "vs previous month" else null,
+            showTrendIcons = showTotal && hasMeaningfulTrends
         )
     }
 }
+
 
 @Composable
 private fun NoDataDisplay(viewMode: String) {
@@ -640,6 +681,9 @@ private fun RevenueCard(
     contextText: String?,
     showTrendIcon: Boolean
 ) {
+    // Only show trend if it's meaningful (not neutral and not 0%)
+    val displayTrend = showTrendIcon && shouldShowTrend(trend)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -660,7 +704,7 @@ private fun RevenueCard(
                     fontWeight = FontWeight.Medium
                 )
 
-                if (showTrendIcon && trend != null && !isZeroPercent(trend.second)) {
+                if (displayTrend && trend != null) {
                     TrendBadge(trend = trend)
                 }
             }
@@ -675,7 +719,7 @@ private fun RevenueCard(
                 fontSize = 36.sp
             )
 
-            if (contextText != null && trend != null && !isZeroPercent(trend.second)) {
+            if (contextText != null && displayTrend && trend != null) {
                 Text(
                     text = contextText,
                     style = MaterialTheme.typography.bodySmall,
@@ -820,7 +864,9 @@ private fun MetricRow(
     trend: Pair<TrendType, String>?,
     showTrendIcon: Boolean
 ) {
-    val showTrend = showTrendIcon && trend != null && !isZeroPercent(trend.second)
+    // Only show trend if it's meaningful (not neutral and not 0%)
+    val displayTrend = showTrendIcon && shouldShowTrend(trend)
+
     val trendColor = when (trend?.first) {
         TrendType.UP -> Green600
         TrendType.DOWN -> Red600
@@ -854,7 +900,7 @@ private fun MetricRow(
                 fontSize = 18.sp
             )
 
-            if (showTrend) {
+            if (displayTrend && trend != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -881,6 +927,7 @@ private fun MetricRow(
         }
     }
 }
+
 
 @Composable
 private fun DailyMetricGrid(metrics: List<DailyMetric>) {
@@ -1046,5 +1093,75 @@ private fun createAverageMetrics(
 
 private fun isZeroPercent(value: String): Boolean {
     val numStr = value.replace("+", "").replace("-", "").replace("%", "").trim()
-    return numStr.toDoubleOrNull() == 0.0
+    val numValue = numStr.toDoubleOrNull() ?: 0.0
+    return numValue == 0.0 || numValue.absoluteValue < 0.5 // Consider < 0.5% as zero
+}
+
+@Composable
+private fun DailyOperationsSkeleton(viewMode: DailyViewMode) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Revenue card skeleton
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(150.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        )
+
+        if (viewMode == DailyViewMode.MONTH) {
+            // Monthly toggle skeleton
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            )
+
+            // Metrics section skeleton
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            )
+        } else {
+            // Daily metrics grid skeleton - First row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                repeat(2) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(130.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    )
+                }
+            }
+
+            // Daily metrics grid skeleton - Second row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                repeat(2) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(130.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    )
+                }
+            }
+        }
+    }
 }

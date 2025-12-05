@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.example.azureaadmin"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.azureaadmin"
@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.foundation)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.foundation.layout)
+    implementation(libs.androidx.runtime)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
