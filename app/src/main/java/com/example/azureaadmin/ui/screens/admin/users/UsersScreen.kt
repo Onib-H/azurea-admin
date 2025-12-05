@@ -36,6 +36,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.repository.AdminRepository
 import com.example.azureaadmin.ui.components.filters.SearchFilterHeader
+import com.example.azureaadmin.ui.components.states.EmptyState
 import com.example.azureaadmin.utils.BaseViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -199,24 +200,13 @@ fun UsersScreen(
                                 }
 
                                 filteredUsers.isEmpty() -> {
-                                    Column(
-                                        modifier = Modifier.align(Alignment.Center),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Person,
-                                            contentDescription = "No users found",
-                                            modifier = Modifier.size(64.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = if (searchQuery.isEmpty()) "No users yet"
-                                            else "No users match your search",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    EmptyState(
+                                        icon = Icons.Outlined.Person,
+                                        title = if (searchQuery.isEmpty()) "No users yet"
+                                        else "No users match your search",
+                                        useScroll = true
+                                    )
+
                                 }
 
                                 else -> {
@@ -260,7 +250,6 @@ fun UsersScreen(
 
                 }
 
-                // Success Snackbar
                 if (showSuccessSnackbar) {
                     androidx.compose.material3.Snackbar(
                         modifier = Modifier
@@ -272,7 +261,6 @@ fun UsersScreen(
                     }
                 }
 
-                // Error Snackbar
                 if (showErrorSnackbar) {
                     androidx.compose.material3.Snackbar(
                         modifier = Modifier

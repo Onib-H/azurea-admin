@@ -69,6 +69,7 @@ import com.example.azureaadmin.ui.components.modals.EditItemDialog
 import com.example.azureaadmin.ui.components.modals.ItemDetail
 import com.example.azureaadmin.ui.components.modals.ItemType
 import com.example.azureaadmin.ui.components.modals.ShowItemDialog
+import com.example.azureaadmin.ui.components.states.EmptyState
 import com.example.azureaadmin.ui.screens.admin.amenities.AmenitiesViewModel
 import com.example.azureaadmin.utils.BaseViewModelFactory
 import kotlinx.coroutines.delay
@@ -232,34 +233,19 @@ fun RoomsScreen(
                                 }
 
                                 filteredRooms.isEmpty() -> {
-                                    Column(
-                                        modifier = Modifier.align(Alignment.Center),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Hotel,
-                                            contentDescription = "No rooms",
-                                            modifier = Modifier.size(64.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "No rooms found",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "Try a different search query or filter, or tap + to add a room",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.7f
-                                            ),
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            modifier = Modifier.padding(horizontal = 32.dp)
-                                        )
-                                    }
+                                    EmptyState(
+                                        icon = Icons.Outlined.Hotel,
+                                        title = if (searchQuery.isEmpty()) "No rooms yet" else "No matching rooms",
+                                        subtitle = if (searchQuery.isEmpty())
+                                            "Add your first room to get started"
+                                        else
+                                            "Try a different search or adjust your filters",
+                                        useScroll = true
+                                    )
+
+
                                 }
+
 
                                 else -> {
                                     LazyColumn(

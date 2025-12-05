@@ -2,6 +2,7 @@ package com.example.azureaadmin.ui.screens.admin.areas
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,14 +28,21 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -52,6 +60,8 @@ fun AreaCard(
     onEditClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {}
 ) {
+    var isDescriptionExpanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -117,7 +127,7 @@ fun AreaCard(
                         .background(
                             color = when (area.status.lowercase()) {
                                 "available" -> GreenAvailable
-                                "maintenance" -> Color(0xFFFFC107) // amber yellow for maintenance
+                                "maintenance" -> Color(0xFFFFC107)
                                 else -> MaterialTheme.colorScheme.surfaceVariant
                             },
                             shape = MaterialTheme.shapes.large
@@ -190,14 +200,49 @@ fun AreaCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = if (area.description.isNullOrBlank()) "No description provided" else area.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // Expandable Description
+                val description = if (area.description.isNullOrBlank()) "No description provided" else area.description
+
+                Column {
+                    Text(
+                        text = buildAnnotatedString {
+                            append(description)
+                            if (!isDescriptionExpanded && description.length > 100) {
+                                append(" ")
+                                withStyle(
+                                    style = SpanStyle(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                ) {
+                                    append("...See more")
+                                }
+                            }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 20.sp,
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable {
+                            if (!isDescriptionExpanded && description.length > 100) {
+                                isDescriptionExpanded = true
+                            }
+                        }
+                    )
+
+                    if (isDescriptionExpanded) {
+                        Text(
+                            text = "See less",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { isDescriptionExpanded = false }
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

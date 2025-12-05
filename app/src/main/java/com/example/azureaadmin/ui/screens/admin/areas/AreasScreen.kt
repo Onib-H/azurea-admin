@@ -68,6 +68,7 @@ import com.example.azureaadmin.ui.components.modals.EditItemDialog
 import com.example.azureaadmin.ui.components.modals.ItemDetail
 import com.example.azureaadmin.ui.components.modals.ItemType
 import com.example.azureaadmin.ui.components.modals.ShowItemDialog
+import com.example.azureaadmin.ui.components.states.EmptyState
 import com.example.azureaadmin.utils.BaseViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -206,33 +207,17 @@ fun AreasScreen(
                                 }
 
                                 filteredAreas.isEmpty() -> {
-                                    Column(
-                                        modifier = Modifier.align(Alignment.Center),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.MeetingRoom,
-                                            contentDescription = "No areas",
-                                            modifier = Modifier.size(64.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = "No areas found",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "Try a different search query or tap + to add a new area",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                                alpha = 0.7f
-                                            ),
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                            modifier = Modifier.padding(horizontal = 32.dp)
-                                        )
-                                    }
+                                    EmptyState(
+                                        icon = Icons.Outlined.MeetingRoom,
+                                        title = if (searchQuery.isEmpty()) "No areas yet" else "No matching areas",
+                                        subtitle = if (searchQuery.isEmpty())
+                                            "Create an area to get started"
+                                        else
+                                            "Try a different search query",
+                                        useScroll = true
+                                    )
+
+
                                 }
 
                                 else -> {

@@ -38,6 +38,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.repository.AdminRepository
 import com.example.azureaadmin.ui.components.filters.SearchFilterHeader
+import com.example.azureaadmin.ui.components.states.EmptyState
 import com.example.azureaadmin.utils.BaseViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -171,24 +172,13 @@ fun ArchivedUsersScreen(
                                 }
 
                                 filteredUsers.isEmpty() -> {
-                                    Column(
-                                        modifier = Modifier.align(Alignment.Center),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.PersonOff,
-                                            contentDescription = "No archived users found",
-                                            modifier = Modifier.size(64.dp),
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(modifier = Modifier.height(16.dp))
-                                        Text(
-                                            text = if (searchQuery.isEmpty()) "No archived users yet"
-                                            else "No archived users match your search",
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    EmptyState(
+                                        icon = Icons.Outlined.PersonOff,
+                                        title = if (searchQuery.isEmpty()) "No archived users yet"
+                                        else "No archived users match your search",
+                                        useScroll = true
+                                    )
+
                                 }
 
                                 else -> {

@@ -18,7 +18,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +39,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.azureaadmin.data.repository.AdminRepository
 import com.example.azureaadmin.ui.components.filters.SearchFilterHeader
+import com.example.azureaadmin.ui.components.states.EmptyState
 import com.example.azureaadmin.utils.BaseViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -136,7 +136,14 @@ fun BookingsScreen(
                             ErrorState(error, onRetry = { viewModel.fetchBookings() })
 
                         filteredBookings.isEmpty() ->
-                            EmptyState(searchQuery)
+                            EmptyState(
+                                icon = Icons.Outlined.CalendarMonth,
+                                title = if (searchQuery.isEmpty()) "There are no bookings at the moment"
+                                else "No bookings match your search",
+                                subtitle = null,
+                                useScroll = true
+                            )
+
 
                         else -> {
                             LazyColumn(
@@ -177,20 +184,6 @@ fun BookingsScreen(
 }
 
 
-
-@Composable
-fun LoadingState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        CircularProgressIndicator(modifier = Modifier.size(48.dp), strokeWidth = 3.dp)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Loading bookings…")
-    }
-}
-
 @Composable
 fun ErrorState(error: String?, onRetry: () -> Unit) {
     Column(
@@ -211,24 +204,4 @@ fun ErrorState(error: String?, onRetry: () -> Unit) {
     }
 }
 
-@Composable
-fun EmptyState(searchQuery: String) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.CalendarMonth,
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = if (searchQuery.isEmpty()) "No bookings found"
-            else "No bookings match your search",
-            style = MaterialTheme.typography.titleMedium
-        )
-    }
-}
+

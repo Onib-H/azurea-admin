@@ -42,6 +42,7 @@ import com.example.azureaadmin.data.models.Amenity
 import com.example.azureaadmin.data.repository.AdminRepository
 import com.example.azureaadmin.ui.components.filters.SearchFilterHeader
 import com.example.azureaadmin.ui.components.modals.DeleteItemDialog
+import com.example.azureaadmin.ui.components.states.EmptyState
 import com.example.azureaadmin.utils.BaseViewModelFactory
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -161,33 +162,14 @@ fun AmenitiesScreen(
                             }
 
                             filteredAmenities.isEmpty() -> {
-                                Column(
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .padding(horizontal = 32.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Outlined.List,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(80.dp),
-                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = if (searchQuery.isEmpty()) "No amenities added yet"
-                                        else "No results found",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = if (searchQuery.isEmpty()) "Add your first amenity to get started"
-                                        else "Try a different search term",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                EmptyState(
+                                    icon = Icons.AutoMirrored.Outlined.List,
+                                    title = if (searchQuery.isEmpty()) "No amenities added yet"
+                                    else "No results found",
+                                    subtitle = if (searchQuery.isEmpty()) "Add your first amenity to get started"
+                                    else "Try a different search term",
+                                    useScroll = true     // for pull-to-refresh support
+                                )
                             }
 
                             else -> {

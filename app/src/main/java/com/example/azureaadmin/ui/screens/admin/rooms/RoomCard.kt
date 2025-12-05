@@ -2,6 +2,7 @@ package com.example.azureaadmin.ui.screens.admin.rooms
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,13 +30,21 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -53,6 +62,8 @@ fun RoomCard(
     onEditClick: () -> Unit = {},
     onDeleteClick: () -> Unit = {}
 ) {
+    var isDescriptionExpanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -63,7 +74,7 @@ fun RoomCard(
         ),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
-            containerColor = Color.White // ✅ force pure white
+            containerColor = Color.White
         )
 
     ) {
@@ -113,14 +124,13 @@ fun RoomCard(
                     }
                 }
 
-                // 🔹 Status Badge (Available / Maintenance)
                 Box(
                     modifier = Modifier
                         .padding(12.dp)
                         .background(
                             color = when (room.status.lowercase()) {
                                 "available" -> GreenAvailable
-                                "maintenance" -> Color(0xFFFFC107) // amber yellow for maintenance
+                                "maintenance" -> Color(0xFFFFC107)
                                 else -> MaterialTheme.colorScheme.surfaceVariant
                             },
                             shape = MaterialTheme.shapes.large
@@ -139,7 +149,6 @@ fun RoomCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-
             }
 
             Column(modifier = Modifier.padding(16.dp)) {
@@ -157,20 +166,19 @@ fun RoomCard(
                     verticalArrangement = Arrangement.spacedBy(7.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // 🔹 Room Type Chip
                     AssistChip(
                         onClick = {},
                         enabled = false,
                         leadingIcon = {
                             Icon(
-                                Icons.Outlined.HomeWork, // 🏠 room type icon
+                                Icons.Outlined.HomeWork,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = Color(0xFF1E63D6)
                             )
                         },
                         colors = AssistChipDefaults.assistChipColors(
-                            containerColor = Color(0xFFEAF3FF), // pastel blue background
+                            containerColor = Color(0xFFEAF3FF),
                             labelColor = Color(0xFF1E63D6)
                         ),
                         border = BorderStroke(1.dp, Color(0xFF1E63D6)),
@@ -179,26 +187,25 @@ fun RoomCard(
                                 text = room.room_type.uppercase(),
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF1E63D6),
-                                fontSize = 9.sp, // ✅ smaller font
+                                fontSize = 9.sp,
                                 maxLines = 1
                             )
                         }
                     )
 
-                    // 🔹 Bed Type Chip
                     AssistChip(
                         onClick = {},
                         enabled = false,
                         leadingIcon = {
                             Icon(
-                                Icons.Outlined.Bed, // 🛏 bed type icon
+                                Icons.Outlined.Bed,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
                                 tint = Color(0xFFDC6C00)
                             )
                         },
                         colors = AssistChipDefaults.assistChipColors(
-                            containerColor = Color(0xFFFFF4E6), // pastel orange background
+                            containerColor = Color(0xFFFFF4E6),
                             labelColor = Color(0xFFDC6C00)
                         ),
                         border = BorderStroke(1.dp, Color(0xFFDC6C00)),
@@ -207,13 +214,12 @@ fun RoomCard(
                                 text = room.bed_type.uppercase(),
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFFDC6C00),
-                                fontSize = 9.sp, // ✅ smaller font
+                                fontSize = 9.sp,
                                 maxLines = 1
                             )
                         }
                     )
 
-                    // 🔹 Max Guests Chip
                     AssistChip(
                         onClick = {},
                         enabled = false,
@@ -222,11 +228,11 @@ fun RoomCard(
                                 Icons.Outlined.People,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = Color(0xFF137A2D) // green icon
+                                tint = Color(0xFF137A2D)
                             )
                         },
                         colors = AssistChipDefaults.assistChipColors(
-                            containerColor = Color(0xFFEFFAEF), // pastel green background
+                            containerColor = Color(0xFFEFFAEF),
                             labelColor = Color(0xFF137A2D)
                         ),
                         border = BorderStroke(1.dp, Color(0xFF137A2D)),
@@ -235,19 +241,57 @@ fun RoomCard(
                                 text = "Max Guests: ${room.max_guests}",
                                 fontWeight = FontWeight.Medium,
                                 color = Color(0xFF137A2D),
-                                fontSize = 9.sp, // ✅ smaller font
+                                fontSize = 9.sp,
                                 maxLines = 1
                             )
                         }
                     )
                 }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Text(
-                    text = if (room.description.isNullOrBlank()) "No description provided" else room.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                // Expandable Description
+                val description = if (room.description.isNullOrBlank()) "No description provided" else room.description
+
+                Column {
+                    Text(
+                        text = buildAnnotatedString {
+                            append(description)
+                            if (!isDescriptionExpanded && description.length > 100) {
+                                append(" ")
+                                withStyle(
+                                    style = SpanStyle(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                ) {
+                                    append("...See more")
+                                }
+                            }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable {
+                            if (!isDescriptionExpanded && description.length > 100) {
+                                isDescriptionExpanded = true
+                            }
+                        }
+                    )
+
+                    if (isDescriptionExpanded) {
+                        Text(
+                            text = "See less",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .clickable { isDescriptionExpanded = false }
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
