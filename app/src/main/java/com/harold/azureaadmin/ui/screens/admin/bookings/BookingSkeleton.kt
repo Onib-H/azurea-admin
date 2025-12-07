@@ -27,7 +27,7 @@ fun BookingSkeleton() {
             SkeletonBox(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(250.dp)
+                    .height(450.dp)
                     .padding(horizontal = 16.dp)
             )
         }

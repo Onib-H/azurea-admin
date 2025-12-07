@@ -203,14 +203,7 @@ private fun NaturalCircularLoader(
     }
 }
 
-enum class BookingActionType {
-    RESERVE,
-    CHECK_IN,
-    CHECK_OUT,
-    REJECT,
-    CANCEL,
-    MARK_NO_SHOW
-}
+
 
 private fun getLoadingText(actionType: BookingActionType): String {
     return when (actionType) {

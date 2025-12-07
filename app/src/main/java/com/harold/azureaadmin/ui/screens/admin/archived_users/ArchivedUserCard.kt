@@ -232,7 +232,8 @@ fun ArchivedUserCard(
                 TextButton(onClick = { showRestoreDialog = false }) {
                     Text("Cancel")
                 }
-            }
+            },
+            containerColor = Color.White
         )
     }
 }

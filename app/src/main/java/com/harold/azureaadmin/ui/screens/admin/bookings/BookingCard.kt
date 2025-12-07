@@ -1,26 +1,13 @@
 package com.harold.azureaadmin.ui.screens.admin.bookings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,26 +16,37 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.harold.azureaadmin.data.models.BookingData
+import com.harold.azureaadmin.ui.theme.AzureaColors
 import com.harold.azureaadmin.utils.FormatDate
+import java.text.SimpleDateFormat
+import java.util.Locale
+
 
 @Composable
 fun BookingCard(
     booking: BookingData,
-    onViewClick: () -> Unit = {}
+    onViewClick: () -> Unit = {},
 ) {
+    val propertyName = booking.room_details?.room_name
+        ?: booking.area_details?.area_name
+        ?: "Unknown"
 
-
-    val propertyName = booking.room_details?.room_name ?: booking.area_details?.area_name ?: "Unknown"
-    val totalAmount = booking.room_details?.discounted_price ?: booking.area_details?.discounted_price
-    val propertyType = if (booking.is_venue_booking) "AREA" else "ROOM"
-    val propertyImage = booking.room_details?.images?.firstOrNull()?.room_image
+    val image = booking.room_details?.images?.firstOrNull()?.room_image
         ?: booking.area_details?.images?.firstOrNull()?.area_image
+
     val guestName = "${booking.user.first_name} ${booking.user.last_name}"
-    val bookingDate = FormatDate.format(booking.created_at)
-    val checkInDate = FormatDate.format(booking.check_in_date)
-    val checkOutDate = FormatDate.format(booking.check_out_date)
+    val isVerified = booking.user.is_verified == "verified"
+
+    val checkIn = FormatDate.format(booking.check_in_date)
+    val checkOut = FormatDate.format(booking.check_out_date)
+    val bookingDate = formatDateTime(booking.created_at)
+
+    val propertyType = if (booking.is_venue_booking) "AREA" else "ROOM"
+
+    val price = "₱${"%,.2f".format(booking.discounted_price)}"
 
     Card(
         modifier = Modifier
@@ -58,151 +56,302 @@ fun BookingCard(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(20.dp)) {
 
-            // Top Row: image + property info
             Row(verticalAlignment = Alignment.CenterVertically) {
+
                 AsyncImage(
-                    model = propertyImage ?: "",
+                    model = image ?: "",
                     contentDescription = null,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(70.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
+                        .size(96.dp)
+                        .clip(RoundedCornerShape(12.dp))
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(Modifier.width(16.dp))
 
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = propertyName,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        color = AzureaColors.NeutralDark,
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     PropertyChip(propertyType)
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Guest + booking date + status chip
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(AzureaColors.NeutralLight, RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = guestName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        guestName,
+                        color = AzureaColors.NeutralDark,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
                     )
                     Text(
-                        text = bookingDate,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        booking.user.email,
+                        color = AzureaColors.NeutralMedium,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
+
+                if (isVerified) {
+                    VerifiedBadge()
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+
+                Row(modifier = Modifier.weight(1f)) {
+
+                    Icon(
+                        Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        tint = AzureaColors.NeutralMedium,
+                        modifier = Modifier.size(28.dp)
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    Text(
+                        text = "Booked: $bookingDate",
+                        color = AzureaColors.NeutralMedium,
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 16.sp
+                    )
+                }
+
+                Spacer(Modifier.width(8.dp))
 
                 BookingStatusChip(booking.status)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Check-in / Check-out
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("Check-in", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = checkInDate,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                    )
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("Check-out", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = checkOutDate,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
-                    )
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                CardDateBlock(
+                    label = "Check-in",
+                    value = checkIn,
+                    bg = AzureaColors.PurpleLighter,
+                    labelColor = AzureaColors.Purple,
+                    modifier = Modifier.weight(1f)
+                )
+
+                CardDateBlock(
+                    label = "Check-out",
+                    value = checkOut,
+                    bg = AzureaColors.WarningLight,
+                    labelColor = AzureaColors.Warning,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
-            Divider(
-                modifier = Modifier
-                    .padding(vertical = 10.dp)
-                    .fillMaxWidth(),
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            )
 
-            // Bottom row: price and view button
+            Spacer(Modifier.height(12.dp))
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (totalAmount.isNullOrEmpty())
-                        "₱${"%,.2f".format(booking.total_price)}"
-                    else totalAmount,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-
-                IconButton(
-                    onClick = onViewClick,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.primary)
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Outlined.Visibility,
-                        contentDescription = "View Booking",
-                        tint = Color.White
+                        Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = AzureaColors.NeutralMedium,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        booking.payment_method,
+                        color = AzureaColors.NeutralMedium,
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
+
+                Text(
+                    price,
+                    color = AzureaColors.NeutralDark,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                )
+            }
+
+
+            Button(
+                onClick = onViewClick,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = AzureaColors.Purple),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Visibility,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                    tint = Color.White
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("View", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
+
+
+@Composable
+fun VerifiedBadge() {
+    Box(
+        modifier = Modifier
+            .background(AzureaColors.SuccessLight, RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Outlined.Check,
+                contentDescription = null,
+                tint = AzureaColors.Success,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "Verified",
+                color = AzureaColors.Success,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+
+
+@Composable
+fun CardDateBlock(
+    label: String,
+    value: String,
+    bg: Color,
+    labelColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(bg, RoundedCornerShape(8.dp))
+            .padding(12.dp)
+    ) {
+        Column {
+            Text(
+                label,
+                color = labelColor,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Medium
+                )
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                value,
+                color = AzureaColors.NeutralDark,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,          // ✔ prevent wrapping
+                softWrap = false       // ✔ truly forces single line
+            )
+        }
+    }
+}
+
+
+
+
 @Composable
 fun StatusChip(text: String, backgroundColor: Color, textColor: Color) {
     Box(
         modifier = Modifier
-            .background(backgroundColor, shape = RoundedCornerShape(50))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center
+            .background(backgroundColor, RoundedCornerShape(50))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
-            text = text.uppercase(),
+            text.uppercase(),
             color = textColor,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp
+            )
         )
     }
 }
 
 @Composable
 fun PropertyChip(type: String) {
-    val (bgColor, textColor) = when (type.lowercase()) {
-        "room" -> Color(0xFFE3F6E8) to Color(0xFF0E7A34)   // soft mint green
-        "area" -> Color(0xFFE4EBFF) to Color(0xFF204ECF)   // cool blue
-        else -> Color(0xFFF2F2F2) to Color(0xFF333333)
+    val (bg, text) = when (type.lowercase()) {
+        "room" -> AzureaColors.PurpleLighter to AzureaColors.Purple
+        "area" -> Color(0xFFE6EDFF) to Color(0xFF2F48C9)
+        else -> AzureaColors.NeutralLight to AzureaColors.NeutralDark
     }
-    StatusChip(text = type, backgroundColor = bgColor, textColor = textColor)
+    StatusChip(type, bg, text)
 }
 
 @Composable
 fun BookingStatusChip(status: String) {
-    val (bgColor, textColor) = when (status.lowercase()) {
-        "checked_in" -> Color(0xFFDCEBFF) to Color(0xFF0C56B0)   // deeper blue
-        "pending" -> Color(0xFFFFF3CD) to Color(0xFF946200)      // warm yellow
-        "reserved" -> Color(0xFFE4F9F2) to Color(0xFF008A5C)     // teal-green
-        "cancelled" -> Color(0xFFFFE6E6) to Color(0xFFD32F2F)
-        else -> Color(0xFFF2F2F2) to Color(0xFF333333)
+    val (bg, text) = when (status.lowercase()) {
+        "checked_in" -> AzureaColors.PurpleLight to AzureaColors.Purple
+        "pending" -> AzureaColors.WarningLight to AzureaColors.Warning
+        "reserved" -> AzureaColors.SuccessLight to AzureaColors.Success
+        "cancelled" -> AzureaColors.ErrorLight to AzureaColors.Error
+        "rejected" -> AzureaColors.ErrorLight to AzureaColors.Error
+        "checked_out" -> AzureaColors.PurpleLight to AzureaColors.Purple
+        "no_show" -> AzureaColors.ErrorLight to AzureaColors.Error
+        else -> AzureaColors.NeutralLight to AzureaColors.NeutralDark
     }
-    StatusChip(text = status, backgroundColor = bgColor, textColor = textColor)
+    StatusChip(status, bg, text)
+}
+
+private fun formatDateTime(input: String?): String {
+    if (input.isNullOrBlank()) return "N/A"
+    return try {
+        val inputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX", Locale.getDefault())
+        val date = inputFormat.parse(input)
+
+        val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+        val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+
+        date?.let {
+            "${dateFormat.format(it)}\nat ${timeFormat.format(it)}"
+        } ?: "N/A"
+    } catch (e: Exception) {
+        // Fallback for different format
+        try {
+            val inputFormat2 = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+            val date = inputFormat2.parse(input)
+            val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+            val timeFormat = SimpleDateFormat("hh:mm a", Locale.getDefault())
+            date?.let {
+                "${dateFormat.format(it)}\nat ${timeFormat.format(it)}"
+            } ?: "N/A"
+        } catch (e2: Exception) {
+            "N/A"
+        }
+    }
 }

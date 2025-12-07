@@ -31,13 +31,30 @@ fun BookingsScreen(
 
     LaunchedEffect(Unit) { viewModel.fetchBookings() }
 
-    val filtered =
-        if (searchQuery.isBlank()) bookings else bookings.filter {
-            it.user.username.contains(searchQuery, true) ||
-                    it.user.email.contains(searchQuery, true) ||
-                    it.user.first_name.contains(searchQuery, true) ||
-                    it.user.last_name.contains(searchQuery, true)
+    val filtered = if (searchQuery.isBlank()) {
+        bookings
+    } else {
+        val q = searchQuery.lowercase()
+
+        bookings.filter { booking ->
+            val user = booking.user
+            val roomName = booking.room_details?.room_name
+            val areaName = booking.area_details?.area_name
+
+            listOf(
+                user.username,
+                user.email,
+                user.first_name,
+                user.last_name,
+                "$${user.first_name} ${user.last_name}",
+                roomName,
+                areaName
+            ).any { field ->
+                field?.lowercase()?.contains(q) == true
+            }
         }
+    }
+
 
     val onRefresh = {
         if (!refreshLock) {

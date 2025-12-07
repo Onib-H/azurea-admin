@@ -27,7 +27,7 @@ fun RoomSkeleton(){
             SkeletonBox(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(500.dp)
+                    .height(450.dp)
                     .padding(horizontal = 16.dp)
             )
         }

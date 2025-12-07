@@ -50,6 +50,29 @@ private val LightColorScheme = lightColorScheme(
     */
 )
 
+object AzureaColors {
+    val Purple = Color(0xFF7B1FA2)
+    val PurpleDark = Color(0xFF5A1878)
+    val PurpleLight = Color(0xFFEDE1F6)
+    val PurpleLighter = Color(0xFFF6EFFB)
+
+    val NeutralDark = Color(0xFF1A1A1A)
+    val NeutralMedium = Color(0xFF666666)
+    val NeutralLight = Color(0xFFF5F5F5)
+    val NeutralStroke = Color(0xFFEAEAEA)
+
+    val Success = Color(0xFF2E7D32)
+    val SuccessLight = Color(0xFFE8F5E9)
+
+    val Warning = Color(0xFFE67E22)
+    val WarningLight = Color(0xFFFFF4E6)
+
+    val Error = Color(0xFFD32F2F)
+    val ErrorLight = Color(0xFFFFE6E6)
+}
+
+
+
 @Composable
 fun AzureaAdminTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),

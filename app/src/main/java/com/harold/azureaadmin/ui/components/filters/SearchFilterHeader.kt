@@ -24,18 +24,22 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
 @Composable
+
 fun SearchFilterHeader(
     title: String,
     searchPlaceholder: String,
@@ -45,13 +49,22 @@ fun SearchFilterHeader(
     showFilter: Boolean = true
 ) {
     var isSearchExpanded by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(isSearchExpanded) {
+        if (isSearchExpanded) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
     ) {
-        // Header Row with Title and Icons
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -71,7 +84,6 @@ fun SearchFilterHeader(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Search Icon Button
                 IconButton(
                     onClick = {
                         isSearchExpanded = !isSearchExpanded
@@ -101,7 +113,6 @@ fun SearchFilterHeader(
             }
         }
 
-        // Search Bar - Animated slide down/up
         AnimatedVisibility(
             visible = isSearchExpanded,
             enter = expandVertically() + fadeIn(),
@@ -112,7 +123,8 @@ fun SearchFilterHeader(
                 onValueChange = onSearchChange,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 1.dp),
+                    .padding(horizontal = 16.dp, vertical = 1.dp)
+                    .focusRequester(focusRequester),
                 placeholder = { Text(searchPlaceholder) },
                 singleLine = true,
                 leadingIcon = {
