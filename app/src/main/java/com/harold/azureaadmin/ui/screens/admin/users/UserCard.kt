@@ -2,6 +2,7 @@ package com.harold.azureaadmin.ui.screens.admin.users
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.harold.azureaadmin.data.models.User
+import com.harold.azureaadmin.ui.components.LightInfoTooltip
 import com.harold.azureaadmin.ui.components.modals.DeleteItemDialog
 
 @Composable
@@ -60,6 +62,7 @@ fun UserCard(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showVerificationDialog by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showTooltip by remember { mutableStateOf(false) }
 
     val (statusColor, statusIcon) = when (user.is_verified) {
         "verified" -> Color(0xFF4CAF50) to Icons.Outlined.CheckCircle
@@ -133,22 +136,37 @@ fun UserCard(
                             else MaterialTheme.colorScheme.onSurface
                         )
                         if (user.is_senior_or_pwd) {
+
                             Box(
                                 modifier = Modifier
                                     .padding(start = 6.dp)
                                     .size(22.dp)
-                                    .background(
-                                        color = Color(0xFFFF9800).copy(alpha = 0.15f),
-                                        shape = CircleShape
-                                    ),
+                                    .background(Color(0xFFFF9800).copy(alpha = 0.15f), CircleShape)
+                                    .clip(CircleShape)
+                                    .clickable { showTooltip = !showTooltip },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.WheelchairPickup,
                                     contentDescription = "Senior/PWD",
                                     tint = Color(0xFFFF9800),
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(14.dp)
                                 )
+                            }
+
+
+                            // Tooltip popup
+                            if (showTooltip) {
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 4.dp)
+                                ) {
+                                    LightInfoTooltip(
+                                        message = "Senior/PWD gets 20% off.",
+                                        accentColor = Color(0xFFFF9800),
+                                        onDismiss = { showTooltip = false }
+                                    )
+                                }
                             }
                         }
                     }
