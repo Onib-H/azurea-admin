@@ -41,7 +41,7 @@ fun AreasScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedStatus by remember { mutableStateOf("All") }
-    var minPrice by remember { mutableStateOf(0.0) }
+    var minPrice by remember { mutableStateOf(1.0) }
     var maxPrice by remember { mutableStateOf(10000000.0) }
     var minCapacity by remember { mutableStateOf(1) }
     var maxCapacity by remember { mutableStateOf(500) }
@@ -191,7 +191,7 @@ fun AreasScreen(
                 },
                 onReset = {
                     selectedStatus = "All"
-                    minPrice = 0.0
+                    minPrice = 1.0
                     maxPrice = 10000000.0
                     minCapacity = 1
                     maxCapacity = 500

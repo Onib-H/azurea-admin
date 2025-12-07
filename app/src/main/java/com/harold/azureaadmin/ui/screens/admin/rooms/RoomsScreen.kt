@@ -45,7 +45,7 @@ fun RoomsScreen(
     var selectedRoomType by remember { mutableStateOf("All") }
     var selectedBedType by remember { mutableStateOf("All") }
     var selectedStatus by remember { mutableStateOf("All") }
-    var minPrice by remember { mutableStateOf(0.0) }
+    var minPrice by remember { mutableStateOf(1.0) }
     var maxPrice by remember { mutableStateOf(10000000.0) }
     var minGuests by remember { mutableStateOf(1) }
     var maxGuests by remember { mutableStateOf(10) }
@@ -185,7 +185,7 @@ fun RoomsScreen(
                     label = "Price Range",
                     minInitial = minPrice,
                     maxInitial = maxPrice,
-                    minPlaceholder = "0",
+                    minPlaceholder = "1",
                     maxPlaceholder = "10000000"
                 ),
                 FilterSectionTemplate.NumberRangeSection(
@@ -217,7 +217,7 @@ fun RoomsScreen(
                     selectedRoomType = "All"
                     selectedBedType = "All"
                     selectedStatus = "All"
-                    minPrice = 0.0
+                    minPrice = 1.0
                     maxPrice = 10000000.0
                     minGuests = 1
                     maxGuests = 10
