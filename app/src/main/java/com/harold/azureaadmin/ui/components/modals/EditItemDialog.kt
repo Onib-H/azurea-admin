@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -55,6 +56,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.harold.azureaadmin.data.models.Amenity
 import com.harold.azureaadmin.ui.components.button.DropdownField
+import com.harold.azureaadmin.utils.compressImage
 import com.harold.azureaadmin.utils.validateRoomInputs
 
 
@@ -73,395 +75,266 @@ fun EditItemDialog(
     if (!show) return
 
     val inputs = remember { mutableStateMapOf<String, String>() }
-    val selectedAmenities = remember { mutableStateOf(initialAmenities.map { it.description }.toSet()) }
-    var newImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
-    var existingImages by remember { mutableStateOf(initialImages) }
     var validationErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
 
-    LaunchedEffect(show) {
-        if (show) {
-            inputs.clear()
-            inputs.putAll(initialValues)
-            existingImages = initialImages
-            newImageUris = emptyList()
-            selectedAmenities.value = initialAmenities.map { it.description }.toSet()
-            validationErrors = emptyMap()
-        }
+    var existingImages by remember { mutableStateOf(initialImages) }
+    var newImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
+    val selectedAmenities = remember {
+        mutableStateOf(initialAmenities.map { it.description }.toSet())
     }
+
+    LaunchedEffect(show) {
+        inputs.clear()
+        inputs.putAll(initialValues)
+        validationErrors = emptyMap()
+        existingImages = initialImages
+        newImageUris = emptyList()
+        selectedAmenities.value = initialAmenities.map { it.description }.toSet()
+    }
+
+    val context = LocalContext.current
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents(),
         onResult = { uris ->
             if (uris.isNotEmpty()) {
-                newImageUris = uris
-                if (validationErrors.containsKey("Images")) {
-                    validationErrors = validationErrors.filterKeys { it != "Images" }
-                }
+                newImageUris = uris.map { compressImage(context, it) }
+                validationErrors -= "Images"
             }
         }
     )
+
 
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(0.dp),
-            color = Color.White,
-            tonalElevation = 0.dp
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                TopAppBar(
-                    title = { Text("Edit ${if (type == ItemType.ROOM) "Room" else "Area"}") },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.White,
-                        titleContentColor = Color.Black,
-                        navigationIconContentColor = Color.Black,
-                        actionIconContentColor = Color.Black
-                    )
+        Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
+            Column {
+                DialogTopBar(
+                    title = "Edit ${if (type == ItemType.ROOM) "Room" else "Area"}",
+                    onDismiss = onDismiss
                 )
 
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = inputs["Name"] ?: "",
-                        onValueChange = {
-                            inputs["Name"] = it
-                            if (validationErrors.containsKey("Name")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Name" }
-                            }
-                        },
-                        label = { Text(if (type == ItemType.ROOM) "Room Name" else "Area Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = validationErrors.containsKey("Name"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Name")) {
-                                Text(validationErrors["Name"] ?: "")
-                            }
-                        }
+
+                    // Name field
+                    FormTextField(
+                        label = if (type == ItemType.ROOM) "Room Name" else "Area Name",
+                        key = "Name",
+                        inputs = inputs,
+                        validationErrors = validationErrors
                     )
 
+                    // Room-only dropdowns
                     if (type == ItemType.ROOM) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             DropdownField(
                                 label = "Room Type",
-                                value = inputs["Room Type"] ?: "",
-                                options = listOf("Premium", "Suites"),
-                                onSelect = {
-                                    inputs["Room Type"] = it
-                                    if (validationErrors.containsKey("Room Type")) {
-                                        validationErrors = validationErrors.filterKeys { key -> key != "Room Type" }
-                                    }
-                                },
+                                value = (inputs["Room Type"] ?: "Premium").replaceFirstChar { it.uppercase() },
+                                options = listOf("Premium", "Suites").map { it.replaceFirstChar { c -> c.uppercase() } },
+                                onSelect = { inputs["Room Type"] = it.replaceFirstChar { c -> c.uppercase() } },
                                 modifier = Modifier.weight(1f),
                                 isError = validationErrors.containsKey("Room Type"),
                                 errorMessage = validationErrors["Room Type"]
                             )
+
                             DropdownField(
                                 label = "Bed Type",
-                                value = inputs["Bed Type"] ?: "",
-                                options = listOf("Single", "Double", "Twin", "King", "Queen"),
-                                onSelect = {
-                                    inputs["Bed Type"] = it
-                                    if (validationErrors.containsKey("Bed Type")) {
-                                        validationErrors = validationErrors.filterKeys { key -> key != "Bed Type" }
-                                    }
-                                },
+                                value = (inputs["Bed Type"] ?: "Single").replaceFirstChar { it.uppercase() },
+                                options = listOf("Single", "Double", "Twin", "King", "Queen").map { it.replaceFirstChar { c -> c.uppercase() } },
+                                onSelect = { inputs["Bed Type"] = it.replaceFirstChar { c -> c.uppercase() } },
                                 modifier = Modifier.weight(1f),
                                 isError = validationErrors.containsKey("Bed Type"),
                                 errorMessage = validationErrors["Bed Type"]
                             )
+
                         }
                     }
 
+                    // Capacity + Status
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = inputs["Capacity"] ?: "",
-                            onValueChange = {
-                                inputs["Capacity"] = it
-                                if (validationErrors.containsKey("Capacity")) {
-                                    validationErrors = validationErrors.filterKeys { key -> key != "Capacity" }
-                                }
-                            },
-                            label = { Text("Capacity") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
+                        FormTextField(
+                            label = "Capacity",
+                            key = "Capacity",
+                            numberOnly = true,
                             modifier = Modifier.weight(1f),
-                            isError = validationErrors.containsKey("Capacity"),
-                            supportingText = {
-                                if (validationErrors.containsKey("Capacity")) {
-                                    Text(validationErrors["Capacity"] ?: "")
-                                }
-                            }
+                            inputs = inputs,
+                            validationErrors = validationErrors
                         )
                         DropdownField(
                             label = "Status",
-                            value = inputs["Status"] ?: "Available",
-                            options = listOf("Available", "Maintenance"),
-                            onSelect = {
-                                inputs["Status"] = it
-                                if (validationErrors.containsKey("Status")) {
-                                    validationErrors = validationErrors.filterKeys { key -> key != "Status" }
-                                }
-                            },
+                            value = (inputs["Status"] ?: "Available").replaceFirstChar { it.uppercase() },
+                            options = listOf("Available", "Maintenance").map { it.replaceFirstChar { c -> c.uppercase() } },
+                            onSelect = { inputs["Status"] = it },
                             modifier = Modifier.weight(1f),
                             isError = validationErrors.containsKey("Status"),
                             errorMessage = validationErrors["Status"]
                         )
+
                     }
 
-                    OutlinedTextField(
-                        value = inputs["Price"] ?: "",
-                        onValueChange = {
-                            inputs["Price"] = it
-                            if (validationErrors.containsKey("Price")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Price" }
-                            }
-                        },
-                        label = { Text("Price (₱)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = validationErrors.containsKey("Price"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Price")) {
-                                Text(validationErrors["Price"] ?: "")
-                            }
-                        }
+                    // Price
+                    FormTextField(
+                        label = "Price (₱)",
+                        key = "Price",
+                        inputs = inputs,
+                        validationErrors = validationErrors,
+                        numberOnly = true
                     )
 
-                    OutlinedTextField(
-                        value = inputs["Description"] ?: "",
-                        onValueChange = {
-                            inputs["Description"] = it
-                            if (validationErrors.containsKey("Description")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Description" }
-                            }
-                        },
-                        label = { Text("Description") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 100.dp),
-                        maxLines = 3,
-                        isError = validationErrors.containsKey("Description"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Description")) {
-                                Text(validationErrors["Description"] ?: "")
-                            }
-                        }
+                    // Description
+                    FormTextField(
+                        label = "Description",
+                        key = "Description",
+                        inputs = inputs,
+                        validationErrors = validationErrors,
+                        multiLine = true
                     )
 
-                    OutlinedTextField(
-                        value = inputs["Discount"] ?: "",
-                        onValueChange = {
-                            inputs["Discount"] = it
-                            if (validationErrors.containsKey("Discount")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Discount" }
-                            }
-                        },
-                        label = { Text("Discount (%)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = validationErrors.containsKey("Discount"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Discount")) {
-                                Text(validationErrors["Discount"] ?: "")
-                            }
-                        }
+                    // Discount
+                    FormTextField(
+                        label = "Discount (%)",
+                        key = "Discount",
+                        inputs = inputs,
+                        validationErrors = validationErrors,
+                        numberOnly = true
                     )
 
-                    // Image Management Section
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "Images",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium
-                        )
+                    // Images section
+                    EditImagesSection(
+                        existingImages = existingImages,
+                        newImageUris = newImageUris,
+                        validationErrors = validationErrors,
+                        onRemoveExisting = { url -> existingImages = existingImages - url },
+                        onRemoveNew = { uri -> newImageUris = newImageUris - uri },
+                        onPickImages = { imagePickerLauncher.launch("image/*") }
+                    )
 
-                        // Existing Images
-                        if (existingImages.isNotEmpty()) {
-                            Text(
-                                "Current Images:",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                            LazyRow(
-                                modifier = Modifier.padding(top = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(existingImages) { imageUrl ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(80.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    ) {
-                                        androidx.compose.foundation.Image(
-                                            painter = rememberAsyncImagePainter(imageUrl),
-                                            contentDescription = "Existing Image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-
-                                        IconButton(
-                                            onClick = {
-                                                existingImages = existingImages.filter { it != imageUrl }
-                                            },
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .background(Color.Red.copy(alpha = 0.7f), shape = CircleShape)
-                                                .size(20.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Remove Image",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(8.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Add New Images Button
-                        OutlinedButton(
-                            onClick = { imagePickerLauncher.launch("image/*") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp)
-                                .padding(top = 8.dp),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Add New Images (${newImageUris.size} selected)")
-                        }
-
-                        // New Images Preview
-                        if (newImageUris.isNotEmpty()) {
-                            Text(
-                                "New Images:",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
-                            LazyRow(
-                                modifier = Modifier.padding(top = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(newImageUris) { uri ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(80.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    ) {
-                                        androidx.compose.foundation.Image(
-                                            painter = rememberAsyncImagePainter(uri),
-                                            contentDescription = "New Image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-
-                                        IconButton(
-                                            onClick = {
-                                                newImageUris = newImageUris.filter { it != uri }
-                                            },
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .background(Color.Red.copy(alpha = 0.7f), shape = CircleShape)
-                                                .size(20.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Remove Image",
-                                                tint = Color.White,
-                                                modifier = Modifier.size(8.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Image validation error
-                        if (validationErrors.containsKey("Images")) {
-                            Text(
-                                text = validationErrors["Images"] ?: "",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-
+                    // Amenities
                     if (type == ItemType.ROOM) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                "Amenities",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            availableAmenities.forEach { amenity ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = amenity.description in selectedAmenities.value,
-                                        onCheckedChange = {
-                                            selectedAmenities.value =
-                                                if (it) selectedAmenities.value + amenity.description
-                                                else selectedAmenities.value - amenity.description
-                                            if (validationErrors.containsKey("Amenities")) {
-                                                validationErrors = validationErrors.filterKeys { key -> key != "Amenities" }
-                                            }
-                                        }
-                                    )
-                                    Text(amenity.description)
-                                }
-                            }
-                            // Amenities validation error
-                            if (validationErrors.containsKey("Amenities")) {
-                                Text(
-                                    text = validationErrors["Amenities"] ?: "",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        AmenitiesSection(
+                            amenities = availableAmenities.map { it.description },
+                            selectedAmenities = selectedAmenities,
+                            validationErrors = validationErrors
+                        )
                     }
                 }
 
-                Button(
+                SaveButton(
+                    label = "Save Changes",
                     onClick = {
-                        val allImages = existingImages.isNotEmpty() || newImageUris.isNotEmpty()
+                        val hasImages = existingImages.isNotEmpty() || newImageUris.isNotEmpty()
+
                         val validation = validateRoomInputs(
                             inputs,
                             selectedAmenities.value,
-                            if (allImages) listOf(Uri.EMPTY) else emptyList() // Simulate having images
+                            if (hasImages) listOf(Uri.EMPTY) else emptyList() // simulate presence
                         )
+
                         if (validation.isValid) {
                             onSave(inputs, selectedAmenities.value.toList(), newImageUris, existingImages)
                             onDismiss()
                         } else {
                             validationErrors = validation.errors
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Save Changes")
-                }
+                    }
+                )
             }
         }
     }
 }
+
+@Composable
+fun EditImagesSection(
+    existingImages: List<String>,
+    newImageUris: List<Uri>,
+    validationErrors: Map<String, String>,
+    onRemoveExisting: (String) -> Unit,
+    onRemoveNew: (Uri) -> Unit,
+    onPickImages: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+
+        Text("Images", fontWeight = FontWeight.Medium)
+
+        if (existingImages.isNotEmpty()) {
+            Text("Current Images:", modifier = Modifier.padding(top = 8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(existingImages) { url ->
+                    ImagePreviewBox(
+                        painter = rememberAsyncImagePainter(url),
+                        onRemove = { onRemoveExisting(url) }
+                    )
+                }
+            }
+        }
+
+        OutlinedButton(
+            onClick = onPickImages,
+            modifier = Modifier.fillMaxWidth().height(60.dp).padding(top = 8.dp)
+        ) {
+            Text("Add New Images (${newImageUris.size} selected)")
+        }
+
+        if (newImageUris.isNotEmpty()) {
+            Text("New Images:", modifier = Modifier.padding(top = 8.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(newImageUris) { uri ->
+                    ImagePreviewBox(
+                        painter = rememberAsyncImagePainter(uri),
+                        onRemove = { onRemoveNew(uri) }
+                    )
+                }
+            }
+        }
+
+        validationErrors["Images"]?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+
+@Composable
+fun ImagePreviewBox(
+    painter: Any,
+    onRemove: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(80.dp)
+            .clip(RoundedCornerShape(8.dp))
+    ) {
+        androidx.compose.foundation.Image(
+            painter = painter as androidx.compose.ui.graphics.painter.Painter,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        IconButton(
+            onClick = onRemove,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .background(Color.Red.copy(alpha = 0.7f), CircleShape)
+                .size(20.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove Image",
+                tint = Color.White,
+                modifier = Modifier.size(8.dp)
+            )
+        }
+    }
+}
+
+
+

@@ -31,15 +31,17 @@ class RoomsViewModel @Inject constructor(
 
     fun fetchRooms() {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
+            _error.value = null
             try {
                 _rooms.value = repository.getRooms()
-                _error.value = null
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Unknown error"
-            } finally {
-                _loading.value = false
             }
+
+            _loading.value = false
+
         }
     }
 
@@ -56,9 +58,10 @@ class RoomsViewModel @Inject constructor(
         context: Context
     ) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
-                repository.addRoom(
+                val newRoom = repository.addRoom(
                     name = name,
                     roomType = roomType.lowercase(),
                     bedType = bedType.lowercase(),
@@ -71,8 +74,8 @@ class RoomsViewModel @Inject constructor(
                     context = context
                 )
 
-                // ✅ Refresh by calling fetchRooms()
-                fetchRooms()
+                _rooms.value = _rooms.value + newRoom
+
 
                 _error.value = null
             } catch (e: Exception) {
@@ -99,9 +102,17 @@ class RoomsViewModel @Inject constructor(
         context: Context
     ) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
-                repository.editRoom(
+                // Validate discount_percent before sending
+                if (discountPercent < 0 || discountPercent > 99) {
+                    _error.value = "Discount must be between 0 and 99"
+                    _loading.value = false
+                    return@launch
+                }
+
+                val updated = repository.editRoom(
                     roomId = roomId,
                     name = name,
                     roomType = roomType.lowercase(),
@@ -116,13 +127,18 @@ class RoomsViewModel @Inject constructor(
                     existingImages = existingImages,
                     context = context
                 )
-
-                // ✅ Refresh
-                fetchRooms()
-
+                _rooms.value = _rooms.value.map { if (it.id == roomId) updated else it }
                 _error.value = null
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Error editing room"
+                // Handle specific error for unavailable status with active bookings
+                val errorMessage = e.localizedMessage ?: "Error editing room"
+                _error.value = when {
+                    errorMessage.contains("Cannot change status to unavailable") ->
+                        "Cannot set room to unavailable - there are active or reserved bookings"
+                    errorMessage.contains("Discount must be between") ->
+                        "Discount must be between 0 and 99"
+                    else -> errorMessage
+                }
             } finally {
                 _loading.value = false
             }
@@ -131,15 +147,14 @@ class RoomsViewModel @Inject constructor(
 
     fun deleteRoom(id: Int) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
                 val message = repository.deleteRoom(id)
 
-                // ✅ Refresh
-                fetchRooms()
-
+                _rooms.value = _rooms.value.filterNot { it.id == id }
                 _error.value = null
-                println("Delete success: $message")
+
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Error deleting room"
             } finally {
@@ -151,6 +166,7 @@ class RoomsViewModel @Inject constructor(
 
     fun fetchRoomDetail(roomId: Int) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
                 _selectedRoomDetail.value = repository.showRoom(roomId)

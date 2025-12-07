@@ -24,69 +24,69 @@ class AmenitiesViewModel @Inject constructor(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
+    private fun handleError(e: Exception) {
+        _error.value = e.localizedMessage ?: "Unknown error"
+    }
+
     fun fetchAmenities() {
         viewModelScope.launch {
+            if (_loading.value) return@launch
+
             _loading.value = true
+            _error.value = null
+
             try {
                 _amenities.value = repository.getAmenities()
-                _error.value = null
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Unknown error"
-            } finally {
-                _loading.value = false
+                handleError(e)
             }
+
+            _loading.value = false
         }
     }
 
     fun addAmenity(description: String) {
         viewModelScope.launch {
-            _loading.value = true
             try {
                 val res = repository.addAmenity(description)
-                if (res.isSuccessful) {
-                    fetchAmenities() // refresh list
-                } else {
-                    _error.value = "Failed to add amenity: ${res.code()}"
+                if (!res.isSuccessful) {
+                    _error.value = "Failed: ${res.code()}"
+                    return@launch
                 }
+
+                // local update instead of fetch
+                fetchAmenities()
+
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Error adding amenity"
-            } finally {
-                _loading.value = false
+                handleError(e)
             }
         }
     }
 
     fun updateAmenity(id: Int, description: String) {
         viewModelScope.launch {
-            _loading.value = true
             try {
                 val res = repository.editAmenity(id, description)
-                if (res.isSuccessful) {
-                    fetchAmenities()
-                } else {
-                    _error.value = "Failed to update amenity: ${res.code()}"
+                if (!res.isSuccessful) {
+                    _error.value = "Failed: ${res.code()}"
+                    return@launch
                 }
+
+                fetchAmenities()
+
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Error updating amenity"
-            } finally {
-                _loading.value = false
+                handleError(e)
             }
         }
     }
 
     fun deleteAmenity(id: Int) {
         viewModelScope.launch {
-            _loading.value = true
             try {
-                val message = repository.deleteAmenity(id)
-                // Re-fetch amenities so UI updates
-                _amenities.value = repository.getAmenities()
-                _error.value = null
-                println("Delete success: $message")
+                repository.deleteAmenity(id)
+                fetchAmenities()
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Error deleting amenity"
-            } finally {
-                _loading.value = false
+                handleError(e)
             }
         }
     }

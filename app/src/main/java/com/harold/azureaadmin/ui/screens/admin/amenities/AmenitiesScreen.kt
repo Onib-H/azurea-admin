@@ -1,47 +1,24 @@
 package com.harold.azureaadmin.ui.screens.admin.amenities
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.harold.azureaadmin.data.models.Amenity
-import com.harold.azureaadmin.ui.components.filters.SearchFilterHeader
+import com.harold.azureaadmin.ui.components.common.ListScreenContainer
 import com.harold.azureaadmin.ui.components.modals.DeleteItemDialog
-import com.harold.azureaadmin.ui.components.states.EmptyState
-import com.harold.azureaadmin.ui.components.states.ErrorState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-
-// AmenitiesScreen.kt - Add blackout effect after refresh
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AmenitiesScreen(
@@ -52,32 +29,26 @@ fun AmenitiesScreen(
     val error by viewModel.error.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
+
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var selectedAmenity by remember { mutableStateOf<Amenity?>(null) }
 
-    // Pull-to-refresh states
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
-    var isRefreshInProgress by remember { mutableStateOf(false) }
-    val pullState = rememberPullToRefreshState()
-
-    // Blackout overlay
+    var refreshLock by remember { mutableStateOf(false) }
     var showBlackout by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.fetchAmenities() }
 
-    val filteredAmenities = if (searchQuery.isBlank()) {
-        amenities
-    } else {
-        amenities.filter { it.description.contains(searchQuery, ignoreCase = true) }
-    }
+    val filtered = if (searchQuery.isBlank()) amenities
+    else amenities.filter { it.description.contains(searchQuery, ignoreCase = true) }
 
     val onRefresh = {
-        if (!isRefreshInProgress) {
+        if (!refreshLock) {
             scope.launch {
-                isRefreshInProgress = true
+                refreshLock = true
                 isRefreshing = true
 
                 viewModel.fetchAmenities()
@@ -88,92 +59,52 @@ fun AmenitiesScreen(
                 showBlackout = false
 
                 isRefreshing = false
-                isRefreshInProgress = false
+                refreshLock = false
             }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            SearchFilterHeader(
-                title = "Manage Amenities",
-                searchPlaceholder = "Search amenities",
-                searchQuery = searchQuery,
-                onSearchChange = { searchQuery = it },
-                onFilterClick = { },
-                showFilter = false
-            )
 
-            androidx.compose.animation.AnimatedVisibility(
-                visible = !showBlackout,
-                enter = androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)),
-                exit = androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(150))
+        ListScreenContainer(
+            title = "Manage Amenities",
+            searchPlaceholder = "Search amenities",
+            searchQuery = searchQuery,
+            onSearchChange = { searchQuery = it },
+            showFilter = false,
+            onFilterClick = {  },
+
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            showBlackout = showBlackout,
+
+            loading = loading,
+            error = error,
+            items = filtered,
+
+            emptyIcon = Icons.AutoMirrored.Outlined.List,
+            emptyTitle = if (searchQuery.isBlank()) "No amenities added yet" else "No results found",
+            emptySubtitle = if (searchQuery.isBlank()) "Add your first amenity to get started" else null,
+
+            skeleton = { AmenitySkeleton() }
+        ) { list ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
-                PullToRefreshBox(
-                    state = pullState,
-                    isRefreshing = isRefreshing,
-                    onRefresh = onRefresh,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        when {
-                            loading && amenities.isEmpty() -> {
-                                AmenitySkeleton()
-                            }
-
-                            error != null && amenities.isEmpty() -> {
-                                ErrorState(error, { viewModel.fetchAmenities() })
-                            }
-
-                            filteredAmenities.isEmpty() -> {
-                                EmptyState(
-                                    icon = Icons.AutoMirrored.Outlined.List,
-                                    title = if (searchQuery.isEmpty()) "No amenities added yet"
-                                    else "No results found",
-                                    subtitle = if (searchQuery.isEmpty()) "Add your first amenity to get started"
-                                    else "Try a different search term",
-                                    useScroll = true     // for pull-to-refresh support
-                                )
-                            }
-
-                            else -> {
-                                LazyColumn(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(
-                                        top = 8.dp,
-                                        bottom = 80.dp
-                                    )
-                                ) {
-                                    items(
-                                        items = filteredAmenities,
-                                        key = { it.id }
-                                    ) { amenity ->
-                                        AmenityCard(
-                                            amenity = amenity,
-                                            onEditClick = {
-                                                selectedAmenity = amenity
-                                                showEditDialog = true
-                                            },
-                                            onDeleteClick = {
-                                                selectedAmenity = amenity
-                                                showDeleteDialog = true
-                                            }
-                                        )
-                                    }
-                                }
-                            }
+                items(list, key = { it.id }) { amenity ->
+                    AmenityCard(
+                        amenity = amenity,
+                        onEditClick = {
+                            selectedAmenity = amenity
+                            showEditDialog = true
+                        },
+                        onDeleteClick = {
+                            selectedAmenity = amenity
+                            showDeleteDialog = true
                         }
-                    }
+                    )
                 }
-            }
-
-            if (showBlackout) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.35f))
-                        .zIndex(10f)
-                )
             }
         }
 
@@ -183,23 +114,17 @@ fun AmenitiesScreen(
             contentColor = Color.White,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 24.dp)
-                .size(60.dp)
+                .padding(20.dp)
         ) {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = "Add Amenity",
-                modifier = Modifier.size(32.dp)
-            )
+            Icon(Icons.Default.Add, contentDescription = null)
         }
     }
 
-    // Dialogs remain the same...
     AddAmenityDialog(
         show = showAddDialog,
         onDismiss = { showAddDialog = false },
-        onSave = { description ->
-            viewModel.addAmenity(description)
+        onSave = {
+            viewModel.addAmenity(it)
             showAddDialog = false
         }
     )
@@ -208,10 +133,8 @@ fun AmenitiesScreen(
         show = showEditDialog,
         currentValue = selectedAmenity?.description ?: "",
         onDismiss = { showEditDialog = false },
-        onUpdate = { newValue ->
-            selectedAmenity?.let {
-                viewModel.updateAmenity(it.id, newValue)
-            }
+        onUpdate = { value ->
+            selectedAmenity?.let { viewModel.updateAmenity(it.id, value) }
             showEditDialog = false
         }
     )

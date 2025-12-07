@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class UsersViewModel @Inject constructor(
-    private val repository: AdminRepository) : ViewModel() {
+    private val repository: AdminRepository
+) : ViewModel() {
 
     private val _users = MutableStateFlow<List<User>>(emptyList())
     val users: StateFlow<List<User>> = _users
@@ -27,7 +28,6 @@ class UsersViewModel @Inject constructor(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
-    // Add these new state flows
     private val _archiveSuccess = MutableStateFlow<String?>(null)
     val archiveSuccess: StateFlow<String?> = _archiveSuccess
 
@@ -43,88 +43,79 @@ class UsersViewModel @Inject constructor(
     private var currentPage = 1
     private val pageSize = 10
 
+    private fun handleError(e: Exception) {
+        _error.value = e.localizedMessage ?: "Unknown error"
+    }
+
     fun fetchUsers(page: Int = 1) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
+
             _loading.value = true
+            _error.value = null
+
             try {
-                val response = repository.fetchAllUsers(page, pageSize)
-                if (response.isSuccessful) {
-                    response.body()?.let { usersResponse ->
-                        _users.value = usersResponse.users
-                        _pagination.value = usersResponse.pagination
-                        currentPage = page
-                    }
-                    _error.value = null
-                } else {
-                    _error.value = "Failed to fetch users: ${response.code()}"
+                val res = repository.fetchAllUsers(page, pageSize)
+                val body = res.body() ?: return@launch run {
+                    _error.value = "No user data"
                 }
+
+                _users.value = body.users
+                _pagination.value = body.pagination
+                currentPage = page
+
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Unknown error"
-            } finally {
-                _loading.value = false
+                handleError(e)
             }
+
+            _loading.value = false
         }
     }
 
     fun loadNextPage() {
-        _pagination.value?.let { pagination ->
-            if (currentPage < pagination.total_pages) {
-                fetchUsers(currentPage + 1)
-            }
-        }
+        val page = _pagination.value?.current_page ?: return
+        val total = _pagination.value?.total_pages ?: return
+        if (page < total) fetchUsers(page + 1)
     }
 
     fun loadPreviousPage() {
-        if (currentPage > 1) {
-            fetchUsers(currentPage - 1)
-        }
+        val page = _pagination.value?.current_page ?: return
+        if (page > 1) fetchUsers(page - 1)
     }
 
-    // Add this new method
     fun archiveUser(userId: Int) {
         viewModelScope.launch {
             try {
-                val response = repository.archiveUser(userId)
-                if (response.isSuccessful) {
-                    _archiveSuccess.value = "User archived successfully"
-                    _users.value = _users.value.filter { it.id != userId }
-                    _archiveError.value = null
-                } else {
-                    _archiveError.value = "Failed to archive user: ${response.code()}"
+                val res = repository.archiveUser(userId)
+                if (!res.isSuccessful) {
+                    _archiveError.value = "Failed: ${res.code()}"
+                    return@launch
                 }
+
+                _users.value = _users.value.filterNot { it.id == userId }
+                _archiveSuccess.value = "User archived"
+
             } catch (e: Exception) {
-                _archiveError.value = e.localizedMessage ?: "Unknown error"
+                _archiveError.value = e.localizedMessage
             }
         }
-    }
-
-    fun clearArchiveMessages() {
-        _archiveSuccess.value = null
-        _archiveError.value = null
     }
 
     fun approveUserId(userId: Int, isSeniorOrPwd: Boolean) {
         viewModelScope.launch {
             try {
-                val response = repository.approveValidId(userId, isSeniorOrPwd)
-                if (response.isSuccessful) {
-                    response.body()?.let { result ->
-                        _verificationSuccess.value = result.message
-                        // Update the user in the list
-                        _users.value = _users.value.map { user ->
-                            if (user.id == userId) {
-                                result.user
-                            } else {
-                                user
-                            }
-                        }
-                        _verificationError.value = null
-                    }
-                } else {
-                    _verificationError.value = "Failed to approve ID: ${response.code()}"
+                val res = repository.approveValidId(userId, isSeniorOrPwd)
+                val body = res.body() ?: return@launch
+
+                _users.value = _users.value.map {
+                    if (it.id == userId) body.user else it
                 }
+
+                _verificationSuccess.value = body.message
+                _verificationError.value = null
+
             } catch (e: Exception) {
-                _verificationError.value = e.localizedMessage ?: "Unknown error"
+                _verificationError.value = e.localizedMessage
             }
         }
     }
@@ -132,30 +123,30 @@ class UsersViewModel @Inject constructor(
     fun rejectUserId(userId: Int, reason: String) {
         viewModelScope.launch {
             try {
-                val response = repository.rejectValidId(userId, reason)
-                if (response.isSuccessful) {
-                    response.body()?.let { result ->
-                        _verificationSuccess.value = result.message
-                        // Update the user in the list
-                        _users.value = _users.value.map { user ->
-                            if (user.id == userId) {
-                                user.copy(
-                                    is_verified = result.is_verified,
-                                    valid_id_rejection_reason = result.valid_id_rejection_reason
-                                )
-                            } else {
-                                user
-                            }
-                        }
-                        _verificationError.value = null
-                    }
-                } else {
-                    _verificationError.value = "Failed to reject ID: ${response.code()}"
+                val res = repository.rejectValidId(userId, reason)
+                val body = res.body() ?: return@launch
+
+                _users.value = _users.value.map {
+                    if (it.id == userId)
+                        it.copy(
+                            is_verified = body.is_verified,
+                            valid_id_rejection_reason = body.valid_id_rejection_reason
+                        )
+                    else it
                 }
+
+                _verificationSuccess.value = body.message
+                _verificationError.value = null
+
             } catch (e: Exception) {
-                _verificationError.value = e.localizedMessage ?: "Unknown error"
+                _verificationError.value = e.localizedMessage
             }
         }
+    }
+
+    fun clearArchiveMessages() {
+        _archiveSuccess.value = null
+        _archiveError.value = null
     }
 
     fun clearVerificationMessages() {

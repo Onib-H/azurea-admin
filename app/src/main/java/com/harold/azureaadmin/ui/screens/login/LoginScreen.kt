@@ -71,7 +71,6 @@ import com.harold.azureaadmin.R
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(24.dp)
             ) {
-                // Logo
                 Image(
                     painter = painterResource(id = R.drawable.logo),
                     contentDescription = "App Logo",
@@ -80,7 +79,6 @@ import com.harold.azureaadmin.R
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Title
                 Text(
                     text = buildAnnotatedString {
                         append("Welcome to ")
@@ -91,9 +89,7 @@ import com.harold.azureaadmin.R
                                 ),
                                 fontWeight = FontWeight.Bold
                             )
-                        ) {
-                            append("Azurea")
-                        }
+                        ) { append("Azurea") }
                     },
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
@@ -101,10 +97,9 @@ import com.harold.azureaadmin.R
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Email field
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = { email = it.trim() },
                     label = { Text("Email", color = Color.Gray) },
                     placeholder = { Text("email@gmail.com", color = Color.Gray) },
                     modifier = Modifier.fillMaxWidth(),
@@ -121,12 +116,11 @@ import com.harold.azureaadmin.R
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Password field
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None
-                    else PasswordVisualTransformation(),
+                    visualTransformation =
+                        if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     label = { Text("Password", color = Color.Gray) },
                     placeholder = { Text("Enter your password", color = Color.Gray) },
                     modifier = Modifier.fillMaxWidth(),
@@ -139,14 +133,12 @@ import com.harold.azureaadmin.R
                         )
                     },
                     trailingIcon = {
-                        val visibilityIcon = if (passwordVisible) Icons.Filled.Visibility
-                        else Icons.Filled.VisibilityOff
-                        val description = if (passwordVisible) "Hide password" else "Show password"
-
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
-                                imageVector = visibilityIcon,
-                                contentDescription = description,
+                                imageVector =
+                                    if (passwordVisible) Icons.Filled.Visibility
+                                    else Icons.Filled.VisibilityOff,
+                                contentDescription = "Toggle password",
                                 tint = Color.Black
                             )
                         }
@@ -154,7 +146,6 @@ import com.harold.azureaadmin.R
                     textStyle = TextStyle(color = Color.Black)
                 )
 
-                // ✅ Show error just below the password input
                 if (loginState is LoginState.Error) {
                     Text(
                         text = (loginState as LoginState.Error).message,
@@ -168,7 +159,6 @@ import com.harold.azureaadmin.R
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -179,7 +169,6 @@ import com.harold.azureaadmin.R
                         },
                     contentAlignment = Alignment.Center
                 ) {
-
                     if (loginState is LoginState.Loading) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -198,16 +187,11 @@ import com.harold.azureaadmin.R
                     }
                 }
 
-
-                when (loginState) {
-                    is LoginState.Success -> {
-                        // ✅ Navigation happens here
-                        LaunchedEffect(Unit) { onLoginSuccess() }
-                    }
-                    else -> {}
+                if (loginState is LoginState.Success) {
+                    LaunchedEffect(Unit) { onLoginSuccess() }
                 }
-
             }
         }
     }
+
 

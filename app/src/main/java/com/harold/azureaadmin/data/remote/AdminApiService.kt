@@ -51,6 +51,7 @@ import retrofit2.http.Query
 interface AdminApiService {
 
     // api
+
     @POST("api/auth/admin/login")
     suspend fun login(@Body request: AdminLoginRequest): Response<AdminLoginResponse>
 

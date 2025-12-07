@@ -2,36 +2,19 @@ package com.harold.azureaadmin.ui.screens.admin.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.harold.azureaadmin.data.models.AdminStatsResponse
-import com.harold.azureaadmin.data.models.AreaBookingResponse
-import com.harold.azureaadmin.data.models.AreaRevenueResponse
-import com.harold.azureaadmin.data.models.BookingStatusCounts
-import com.harold.azureaadmin.data.models.DailyBookingsResponse
-import com.harold.azureaadmin.data.models.DailyCancellationsResponse
-import com.harold.azureaadmin.data.models.DailyCheckInCheckoutResponse
-import com.harold.azureaadmin.data.models.DailyNoShowRejectedResponse
-import com.harold.azureaadmin.data.models.DailyRevenueResponse
-import com.harold.azureaadmin.data.models.MonthlyReportResponse
-import com.harold.azureaadmin.data.models.RoomBookingResponse
-import com.harold.azureaadmin.data.models.RoomRevenueResponse
+import com.harold.azureaadmin.data.models.*
 import com.harold.azureaadmin.data.repository.AdminRepository
 import com.harold.azureaadmin.utils.FormatPrice
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.absoluteValue
 
-enum class DailyViewMode {
-    DAY, WEEK, MONTH
-}
-
+enum class DailyViewMode { DAY, WEEK, MONTH }
 
 data class StatWithTrend(
     val label: String,
@@ -52,19 +35,28 @@ data class DailyAnalyticsTrends(
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
-    private val repository: AdminRepository) : ViewModel() {
+    private val repository: AdminRepository
+) : ViewModel() {
 
-    // Monthly stats and pie chart (controlled by month header)
-    private val _stats = MutableStateFlow<AdminStatsResponse?>(null)
-    val stats: StateFlow<AdminStatsResponse?> = _stats
-
-    private val _bookingStatusCounts = MutableStateFlow<List<BookingStatusCounts>?>(null)
-    val bookingStatusCounts: StateFlow<List<BookingStatusCounts>?> = _bookingStatusCounts
+    // ============================================================================
+    // MONTHLY DATA (Stats, Pie Chart, Revenue/Bookings)
+    // ============================================================================
 
     private val _selectedMonth = MutableStateFlow(YearMonth.now())
     val selectedMonth: StateFlow<YearMonth> = _selectedMonth
 
-    // Room and Area Revenue data
+    private val _stats = MutableStateFlow<AdminStatsResponse?>(null)
+    val stats: StateFlow<AdminStatsResponse?> = _stats
+
+    private val _previousStats = MutableStateFlow<AdminStatsResponse?>(null)
+    val previousStats: StateFlow<AdminStatsResponse?> = _previousStats
+
+    private val _statsWithTrends = MutableStateFlow<List<StatWithTrend>>(emptyList())
+    val statsWithTrends: StateFlow<List<StatWithTrend>> = _statsWithTrends
+
+    private val _bookingStatusCounts = MutableStateFlow<List<BookingStatusCounts>?>(null)
+    val bookingStatusCounts: StateFlow<List<BookingStatusCounts>?> = _bookingStatusCounts
+
     private val _roomRevenue = MutableStateFlow<RoomRevenueResponse?>(null)
     val roomRevenue: StateFlow<RoomRevenueResponse?> = _roomRevenue
 
@@ -77,7 +69,10 @@ class DashboardViewModel @Inject constructor(
     private val _areaBookings = MutableStateFlow<AreaBookingResponse?>(null)
     val areaBookings: StateFlow<AreaBookingResponse?> = _areaBookings
 
-    // Monthly Report for PDF generation
+    // ============================================================================
+    // MONTHLY REPORT (PDF Generation)
+    // ============================================================================
+
     private val _monthlyReport = MutableStateFlow<MonthlyReportResponse?>(null)
     val monthlyReport: StateFlow<MonthlyReportResponse?> = _monthlyReport
 
@@ -87,7 +82,10 @@ class DashboardViewModel @Inject constructor(
     private val _reportError = MutableStateFlow<String?>(null)
     val reportError: StateFlow<String?> = _reportError
 
-    // Daily analytics (separate navigation)
+    // ============================================================================
+    // DAILY ANALYTICS
+    // ============================================================================
+
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate
 
@@ -109,9 +107,6 @@ class DashboardViewModel @Inject constructor(
     private val _dailyNoShowRejected = MutableStateFlow<DailyNoShowRejectedResponse?>(null)
     val dailyNoShowRejected: StateFlow<DailyNoShowRejectedResponse?> = _dailyNoShowRejected
 
-    private val _previousStats = MutableStateFlow<AdminStatsResponse?>(null)
-    val previousStats: StateFlow<AdminStatsResponse?> = _previousStats
-
     private val _previousDailyRevenue = MutableStateFlow<DailyRevenueResponse?>(null)
     private val _previousDailyBookings = MutableStateFlow<DailyBookingsResponse?>(null)
     private val _previousDailyCancellations = MutableStateFlow<DailyCancellationsResponse?>(null)
@@ -121,8 +116,9 @@ class DashboardViewModel @Inject constructor(
     private val _dailyAnalyticsTrends = MutableStateFlow<DailyAnalyticsTrends?>(null)
     val dailyAnalyticsTrends: StateFlow<DailyAnalyticsTrends?> = _dailyAnalyticsTrends
 
-    private val _statsWithTrends = MutableStateFlow<List<StatWithTrend>>(emptyList())
-    val statsWithTrends: StateFlow<List<StatWithTrend>> = _statsWithTrends
+    // ============================================================================
+    // LOADING & ERROR STATES
+    // ============================================================================
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
@@ -139,7 +135,10 @@ class DashboardViewModel @Inject constructor(
         stats || booking || daily
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
 
-    // Monthly navigation (for stats and pie chart only)
+    // ============================================================================
+    // MONTHLY NAVIGATION & DATA FETCHING
+    // ============================================================================
+
     fun navigateToPreviousMonth() {
         _selectedMonth.value = _selectedMonth.value.minusMonths(1)
         fetchDataForSelectedMonth()
@@ -150,42 +149,93 @@ class DashboardViewModel @Inject constructor(
         fetchDataForSelectedMonth()
     }
 
-    fun fetchDataForSelectedMonth() {
-        val month = _selectedMonth.value
-        fetchStats(month.monthValue, month.year)
-        fetchPreviousMonthStats(month.monthValue, month.year)
-        fetchBookingStatusCounts(month.monthValue, month.year)
-        fetchRoomAndAreaRevenue(month.monthValue, month.year)
+    fun selectMonth(yearMonth: YearMonth) {
+        _selectedMonth.value = yearMonth
+        fetchDataForSelectedMonth()
     }
 
-    private fun fetchRoomAndAreaRevenue(month: Int, year: Int) {
+    fun fetchDataForSelectedMonth() {
+        val month = _selectedMonth.value
+
         viewModelScope.launch {
+            if (_statsLoading.value || _bookingLoading.value) return@launch
+
+            _statsLoading.value = true
+            _bookingLoading.value = true
+
             try {
-                // Fetch Room Revenue and Bookings
-                val roomRevenueResp = repository.getRoomRevenue(month, year)
-                val roomBookingsResp = repository.getRoomBookings(month, year)
+                // Calculate previous month for trend comparison
+                val (prevMonth, prevYear) = if (month.monthValue == 1) {
+                    12 to (month.year - 1)
+                } else {
+                    (month.monthValue - 1) to month.year
+                }
 
-                if (roomRevenueResp.isSuccessful) _roomRevenue.value = roomRevenueResp.body()
-                if (roomBookingsResp.isSuccessful) _roomBookings.value = roomBookingsResp.body()
+                // Parallel API calls
+                val statsDeferred = async {
+                    repository.getStats(month.monthValue, month.year)
+                }
+                val prevStatsDeferred = async {
+                    repository.getStats(prevMonth, prevYear)
+                }
+                val bookingCountsDeferred = async {
+                    repository.getBookingStatusCounts(month.monthValue, month.year)
+                }
+                val roomRevenueDeferred = async {
+                    repository.getRoomRevenue(month.monthValue, month.year)
+                }
+                val roomBookingsDeferred = async {
+                    repository.getRoomBookings(month.monthValue, month.year)
+                }
+                val areaRevenueDeferred = async {
+                    repository.getAreaRevenue(month.monthValue, month.year)
+                }
+                val areaBookingsDeferred = async {
+                    repository.getAreaBookings(month.monthValue, month.year)
+                }
 
-                // Fetch Area Revenue and Bookings
-                val areaRevenueResp = repository.getAreaRevenue(month, year)
-                val areaBookingsResp = repository.getAreaBookings(month, year)
+                // Await all results
+                val statsResp = statsDeferred.await()
+                val prevStatsResp = prevStatsDeferred.await()
+                val bookingCountsResp = bookingCountsDeferred.await()
+                val roomRevenueResp = roomRevenueDeferred.await()
+                val roomBookingsResp = roomBookingsDeferred.await()
+                val areaRevenueResp = areaRevenueDeferred.await()
+                val areaBookingsResp = areaBookingsDeferred.await()
 
-                if (areaRevenueResp.isSuccessful) _areaRevenue.value = areaRevenueResp.body()
-                if (areaBookingsResp.isSuccessful) _areaBookings.value = areaBookingsResp.body()
+                // Assign results
+                _stats.value = statsResp.body()
+                _previousStats.value = prevStatsResp.body()
+                _bookingStatusCounts.value = bookingCountsResp.body()?.let {
+                    repository.mapBookingStatusToList(it)
+                }
+                _roomRevenue.value = roomRevenueResp.body()
+                _roomBookings.value = roomBookingsResp.body()
+                _areaRevenue.value = areaRevenueResp.body()
+                _areaBookings.value = areaBookingsResp.body()
+
+                // Calculate trends after data is loaded
+                calculateTrends()
+                _error.value = null
 
             } catch (e: Exception) {
-                android.util.Log.e("DashboardVM", "Room/Area revenue error", e)
+                _error.value = e.localizedMessage ?: "Error loading dashboard data"
+            } finally {
+                _statsLoading.value = false
+                _bookingLoading.value = false
             }
         }
     }
 
-    // Fetch monthly report for PDF generation
+    // ============================================================================
+    // MONTHLY REPORT
+    // ============================================================================
+
     fun fetchMonthlyReport() {
         viewModelScope.launch {
             _reportLoading.value = true
             _reportError.value = null
+
             try {
                 val month = _selectedMonth.value
                 val response = repository.getMonthlyReport(month.monthValue, month.year)
@@ -197,7 +247,6 @@ class DashboardViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _reportError.value = "Report error: ${e.localizedMessage ?: "Unknown error"}"
-                android.util.Log.e("DashboardVM", "Monthly report error", e)
             } finally {
                 _reportLoading.value = false
             }
@@ -208,25 +257,28 @@ class DashboardViewModel @Inject constructor(
         _reportError.value = null
     }
 
-    // Daily navigation (for daily analytics only)
+    // ============================================================================
+    // DAILY ANALYTICS NAVIGATION & DATA FETCHING
+    // ============================================================================
+
     fun setDailyViewMode(mode: DailyViewMode) {
         _dailyViewMode.value = mode
     }
 
     fun navigateDailyPrevious() {
-        when (_dailyViewMode.value) {
-            DailyViewMode.DAY -> _selectedDate.value = _selectedDate.value.minusDays(1)
-            DailyViewMode.WEEK -> _selectedDate.value = _selectedDate.value.minusWeeks(1)
-            DailyViewMode.MONTH -> _selectedDate.value = _selectedDate.value.minusMonths(1)
+        _selectedDate.value = when (_dailyViewMode.value) {
+            DailyViewMode.DAY -> _selectedDate.value.minusDays(1)
+            DailyViewMode.WEEK -> _selectedDate.value.minusWeeks(1)
+            DailyViewMode.MONTH -> _selectedDate.value.minusMonths(1)
         }
         fetchDailyData()
     }
 
     fun navigateDailyNext() {
-        when (_dailyViewMode.value) {
-            DailyViewMode.DAY -> _selectedDate.value = _selectedDate.value.plusDays(1)
-            DailyViewMode.WEEK -> _selectedDate.value = _selectedDate.value.plusWeeks(1)
-            DailyViewMode.MONTH -> _selectedDate.value = _selectedDate.value.plusMonths(1)
+        _selectedDate.value = when (_dailyViewMode.value) {
+            DailyViewMode.DAY -> _selectedDate.value.plusDays(1)
+            DailyViewMode.WEEK -> _selectedDate.value.plusWeeks(1)
+            DailyViewMode.MONTH -> _selectedDate.value.plusMonths(1)
         }
         fetchDailyData()
     }
@@ -236,240 +288,195 @@ class DashboardViewModel @Inject constructor(
         fetchDailyData()
     }
 
-    fun selectMonth(yearMonth: YearMonth) {
-        _selectedMonth.value = yearMonth
-        fetchDataForSelectedMonth()
-    }
-
     fun fetchDailyData() {
         viewModelScope.launch {
+            if (_dailyDataLoading.value) return@launch
+
             _dailyDataLoading.value = true
+
             try {
                 val month = _selectedDate.value.monthValue
                 val year = _selectedDate.value.year
 
-                // Fetch current month data
-                val revenueResp = repository.getDailyRevenue(month, year)
-                val bookingsResp = repository.getDailyBookings(month, year)
-                val cancellationsResp = repository.getDailyCancellations(month, year)
-                val checkInsResp = repository.getDailyCheckinsCheckouts(month, year)
-                val noShowResp = repository.getDailyNoShowRejected(month, year)
+                // Parallel API calls for current month
+                val revenueDeferred = async {
+                    repository.getDailyRevenue(month, year)
+                }
+                val bookingsDeferred = async {
+                    repository.getDailyBookings(month, year)
+                }
+                val cancellationsDeferred = async {
+                    repository.getDailyCancellations(month, year)
+                }
+                val checkInsDeferred = async {
+                    repository.getDailyCheckinsCheckouts(month, year)
+                }
+                val noShowDeferred = async {
+                    repository.getDailyNoShowRejected(month, year)
+                }
 
-                if (revenueResp.isSuccessful) _dailyRevenue.value = revenueResp.body()
-                if (bookingsResp.isSuccessful) _dailyBookings.value = bookingsResp.body()
-                if (cancellationsResp.isSuccessful) _dailyCancellations.value = cancellationsResp.body()
-                if (checkInsResp.isSuccessful) _dailyCheckInsCheckOuts.value = checkInsResp.body()
-                if (noShowResp.isSuccessful) _dailyNoShowRejected.value = noShowResp.body()
+                // Await results
+                val revenueResp = revenueDeferred.await()
+                val bookingsResp = bookingsDeferred.await()
+                val cancellationsResp = cancellationsDeferred.await()
+                val checkInsResp = checkInsDeferred.await()
+                val noShowResp = noShowDeferred.await()
+
+                // Assign current month data
+                _dailyRevenue.value = revenueResp.body()
+                _dailyBookings.value = bookingsResp.body()
+                _dailyCancellations.value = cancellationsResp.body()
+                _dailyCheckInsCheckOuts.value = checkInsResp.body()
+                _dailyNoShowRejected.value = noShowResp.body()
 
                 // Fetch previous month for trend comparison
                 fetchPreviousDailyData(month, year)
 
             } catch (e: Exception) {
-                android.util.Log.e("DashboardVM", "Daily data error", e)
+                _error.value = e.localizedMessage ?: "Error loading daily data"
             } finally {
                 _dailyDataLoading.value = false
             }
         }
     }
 
-    private suspend fun fetchPreviousDailyData(currentMonth: Int, currentYear: Int) {
-        try {
-            val (prevMonth, prevYear) = if (currentMonth == 1) {
-                Pair(12, currentYear - 1)
-            } else {
-                Pair(currentMonth - 1, currentYear)
-            }
-
-            val prevRevenueResp = repository.getDailyRevenue(prevMonth, prevYear)
-            val prevBookingsResp = repository.getDailyBookings(prevMonth, prevYear)
-            val prevCancellationsResp = repository.getDailyCancellations(prevMonth, prevYear)
-            val prevCheckInsResp = repository.getDailyCheckinsCheckouts(prevMonth, prevYear)
-            val prevNoShowResp = repository.getDailyNoShowRejected(prevMonth, prevYear)
-
-            if (prevRevenueResp.isSuccessful) _previousDailyRevenue.value = prevRevenueResp.body()
-            if (prevBookingsResp.isSuccessful) _previousDailyBookings.value = prevBookingsResp.body()
-            if (prevCancellationsResp.isSuccessful) _previousDailyCancellations.value = prevCancellationsResp.body()
-            if (prevCheckInsResp.isSuccessful) _previousDailyCheckInsCheckOuts.value = prevCheckInsResp.body()
-            if (prevNoShowResp.isSuccessful) _previousDailyNoShowRejected.value = prevNoShowResp.body()
-
-            // Calculate trends
-            calculateDailyAnalyticsTrends()
-
-        } catch (e: Exception) {
-            android.util.Log.e("DashboardVM", "Previous daily data error", e)
-        }
-    }
-
-    private fun calculateDailyAnalyticsTrends() {
-        val currentRevenue = _dailyRevenue.value
-        val previousRevenue = _previousDailyRevenue.value
-        val currentBookings = _dailyBookings.value
-        val previousBookings = _previousDailyBookings.value
-        val currentCancellations = _dailyCancellations.value
-        val previousCancellations = _previousDailyCancellations.value
-        val currentCheckIns = _dailyCheckInsCheckOuts.value
-        val previousCheckIns = _previousDailyCheckInsCheckOuts.value
-        val currentNoShow = _dailyNoShowRejected.value
-        val previousNoShow = _previousDailyNoShowRejected.value
-
-        // Calculate monthly totals
-        val currMonthRevenue = currentRevenue?.data?.take(currentRevenue.days_in_month)?.sum() ?: 0.0
-        val prevMonthRevenue = previousRevenue?.data?.take(previousRevenue.days_in_month)?.sum() ?: 0.0
-
-        val currMonthBookings = currentBookings?.data?.take(currentBookings.days_in_month)?.sum() ?: 0
-        val prevMonthBookings = previousBookings?.data?.take(previousBookings.days_in_month)?.sum() ?: 0
-
-        val currMonthCancellations = currentCancellations?.data?.take(currentCancellations.days_in_month)?.sum() ?: 0
-        val prevMonthCancellations = previousCancellations?.data?.take(previousCancellations.days_in_month)?.sum() ?: 0
-
-        val currMonthCheckIns = currentCheckIns?.checkins?.take(currentCheckIns.days_in_month)?.sum() ?: 0
-        val prevMonthCheckIns = previousCheckIns?.checkins?.take(previousCheckIns.days_in_month)?.sum() ?: 0
-
-        val currMonthCheckOuts = currentCheckIns?.checkouts?.take(currentCheckIns.days_in_month)?.sum() ?: 0
-        val prevMonthCheckOuts = previousCheckIns?.checkouts?.take(previousCheckIns.days_in_month)?.sum() ?: 0
-
-        val currMonthNoShows = currentNoShow?.no_shows?.take(currentNoShow.days_in_month)?.sum() ?: 0
-        val prevMonthNoShows = previousNoShow?.no_shows?.take(previousNoShow.days_in_month)?.sum() ?: 0
-
-        val currMonthRejected = currentNoShow?.rejected?.take(currentNoShow.days_in_month)?.sum() ?: 0
-        val prevMonthRejected = previousNoShow?.rejected?.take(previousNoShow.days_in_month)?.sum() ?: 0
-
-        _dailyAnalyticsTrends.value = DailyAnalyticsTrends(
-            revenueTrend = calculateTrend(currMonthRevenue, prevMonthRevenue),
-            bookingsTrend = calculateTrend(currMonthBookings.toDouble(), prevMonthBookings.toDouble()),
-            cancellationsTrend = calculateTrend(currMonthCancellations.toDouble(), prevMonthCancellations.toDouble()),
-            checkInsTrend = calculateTrend(currMonthCheckIns.toDouble(), prevMonthCheckIns.toDouble()),
-            checkOutsTrend = calculateTrend(currMonthCheckOuts.toDouble(), prevMonthCheckOuts.toDouble()),
-            noShowsTrend = calculateTrend(currMonthNoShows.toDouble(), prevMonthNoShows.toDouble()),
-            rejectedTrend = calculateTrend(currMonthRejected.toDouble(), prevMonthRejected.toDouble())
-        )
-    }
-
-    private fun fetchStats(month: Int, year: Int) {
+    private fun fetchPreviousDailyData(currentMonth: Int, currentYear: Int) {
         viewModelScope.launch {
-            _statsLoading.value = true
             try {
-                val response = repository.getStats(month, year)
-                if (response.isSuccessful && response.body() != null) {
-                    _stats.value = response.body()
-                    calculateTrends()
-                    _error.value = null
+                val (prevMonth, prevYear) = if (currentMonth == 1) {
+                    12 to (currentYear - 1)
                 } else {
-                    _error.value = "Failed to fetch stats: ${response.code()}"
+                    (currentMonth - 1) to currentYear
                 }
+
+                // Parallel API calls for previous month
+                val prevRevenueDeferred = async {
+                    repository.getDailyRevenue(prevMonth, prevYear)
+                }
+                val prevBookingsDeferred = async {
+                    repository.getDailyBookings(prevMonth, prevYear)
+                }
+                val prevCancellationsDeferred = async {
+                    repository.getDailyCancellations(prevMonth, prevYear)
+                }
+                val prevCheckInsDeferred = async {
+                    repository.getDailyCheckinsCheckouts(prevMonth, prevYear)
+                }
+                val prevNoShowDeferred = async {
+                    repository.getDailyNoShowRejected(prevMonth, prevYear)
+                }
+
+                // Await and assign results
+                _previousDailyRevenue.value = prevRevenueDeferred.await().body()
+                _previousDailyBookings.value = prevBookingsDeferred.await().body()
+                _previousDailyCancellations.value = prevCancellationsDeferred.await().body()
+                _previousDailyCheckInsCheckOuts.value = prevCheckInsDeferred.await().body()
+                _previousDailyNoShowRejected.value = prevNoShowDeferred.await().body()
+
+                // Calculate trends after previous data is loaded
+                calculateDailyAnalyticsTrends()
+
             } catch (e: Exception) {
-                _error.value = "Stats error: ${e.localizedMessage ?: "Unknown error"}"
-            } finally {
-                _statsLoading.value = false
+                // Previous data is optional for trends, so just log the error
+                android.util.Log.e("DashboardVM", "Previous daily data error", e)
             }
         }
     }
 
-    fun fetchBookingStatusCounts(month: Int, year: Int) {
-        viewModelScope.launch {
-            _bookingLoading.value = true
-            try {
-                val response = repository.getBookingStatusCounts(month, year)
-                if (response.isSuccessful) {
-                    val body = response.body()
-                    if (body != null) {
-                        val counts = repository.mapBookingStatusToList(body)
-                        if (counts.isNotEmpty()) {
-                            _bookingStatusCounts.value = counts
-                            _error.value = null
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                _error.value = "Booking error: ${e.localizedMessage}"
-            } finally {
-                _bookingLoading.value = false
-            }
-        }
-    }
-
-    private fun fetchPreviousMonthStats(month: Int, year: Int) {
-        viewModelScope.launch {
-            try {
-                val previousMonth = if (month == 1) {
-                    Pair(12, year - 1)
-                } else {
-                    Pair(month - 1, year)
-                }
-
-                val response = repository.getStats(previousMonth.first, previousMonth.second)
-                if (response.isSuccessful && response.body() != null) {
-                    _previousStats.value = response.body()
-                    calculateTrends()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("DashboardVM", "Previous stats error", e)
-            }
-        }
-    }
 
     private fun calculateTrends() {
         val current = _stats.value ?: return
         val previous = _previousStats.value
 
-        val trends = mutableListOf<StatWithTrend>()
-
-        trends.add(
+        _statsWithTrends.value = listOf(
             StatWithTrend(
                 label = "Active Bookings",
                 value = current.active_bookings.toString(),
                 trend = null,
                 trendValue = ""
-            )
-        )
-
-        trends.add(
+            ),
             StatWithTrend(
                 label = "Pending Bookings",
                 value = current.pending_bookings.toString(),
                 trend = null,
                 trendValue = ""
-            )
-        )
-
-        val totalBookingsTrend = calculateTrend(
-            current = current.total_bookings.toDouble(),
-            previous = previous?.total_bookings?.toDouble()
-        )
-        trends.add(
+            ),
             StatWithTrend(
                 label = "Total Bookings",
                 value = current.total_bookings.toString(),
-                trend = totalBookingsTrend.first,
-                trendValue = totalBookingsTrend.second
-            )
-        )
-
-        val revenueTrend = calculateTrend(
-            current = current.revenue,
-            previous = previous?.revenue
-        )
-        trends.add(
+                trend = calculateTrend(
+                    current.total_bookings.toDouble(),
+                    previous?.total_bookings?.toDouble()
+                ).first,
+                trendValue = calculateTrend(
+                    current.total_bookings.toDouble(),
+                    previous?.total_bookings?.toDouble()
+                ).second
+            ),
             StatWithTrend(
                 label = "Monthly Revenue",
                 value = FormatPrice.formatRevenue(current.revenue.toString()),
-                trend = revenueTrend.first,
-                trendValue = revenueTrend.second
+                trend = calculateTrend(current.revenue, previous?.revenue).first,
+                trendValue = calculateTrend(current.revenue, previous?.revenue).second
             )
         )
+    }
 
-        _statsWithTrends.value = trends
+    private fun calculateDailyAnalyticsTrends() {
+        val current = _dailyRevenue.value ?: return
+        val previous = _previousDailyRevenue.value
+
+        // Helper function to safely sum data arrays
+        fun sumData(data: List<Double>?, days: Int): Double {
+            return data?.take(days)?.sum() ?: 0.0
+        }
+
+        fun sumDataInt(data: List<Int>?, days: Int): Int {
+            return data?.take(days)?.sum() ?: 0
+        }
+
+        // Calculate monthly totals
+        val currRevenue = sumData(_dailyRevenue.value?.data, current.days_in_month)
+        val prevRevenue = sumData(previous?.data, previous?.days_in_month ?: 0)
+
+        val currBookings = sumDataInt(_dailyBookings.value?.data, _dailyBookings.value?.days_in_month ?: 0)
+        val prevBookings = sumDataInt(_previousDailyBookings.value?.data, _previousDailyBookings.value?.days_in_month ?: 0)
+
+        val currCancellations = sumDataInt(_dailyCancellations.value?.data, _dailyCancellations.value?.days_in_month ?: 0)
+        val prevCancellations = sumDataInt(_previousDailyCancellations.value?.data, _previousDailyCancellations.value?.days_in_month ?: 0)
+
+        val currCheckIns = sumDataInt(_dailyCheckInsCheckOuts.value?.checkins, _dailyCheckInsCheckOuts.value?.days_in_month ?: 0)
+        val prevCheckIns = sumDataInt(_previousDailyCheckInsCheckOuts.value?.checkins, _previousDailyCheckInsCheckOuts.value?.days_in_month ?: 0)
+
+        val currCheckOuts = sumDataInt(_dailyCheckInsCheckOuts.value?.checkouts, _dailyCheckInsCheckOuts.value?.days_in_month ?: 0)
+        val prevCheckOuts = sumDataInt(_previousDailyCheckInsCheckOuts.value?.checkouts, _previousDailyCheckInsCheckOuts.value?.days_in_month ?: 0)
+
+        val currNoShows = sumDataInt(_dailyNoShowRejected.value?.no_shows, _dailyNoShowRejected.value?.days_in_month ?: 0)
+        val prevNoShows = sumDataInt(_previousDailyNoShowRejected.value?.no_shows, _previousDailyNoShowRejected.value?.days_in_month ?: 0)
+
+        val currRejected = sumDataInt(_dailyNoShowRejected.value?.rejected, _dailyNoShowRejected.value?.days_in_month ?: 0)
+        val prevRejected = sumDataInt(_previousDailyNoShowRejected.value?.rejected, _previousDailyNoShowRejected.value?.days_in_month ?: 0)
+
+        _dailyAnalyticsTrends.value = DailyAnalyticsTrends(
+            revenueTrend = calculateTrend(currRevenue, prevRevenue),
+            bookingsTrend = calculateTrend(currBookings.toDouble(), prevBookings.toDouble()),
+            cancellationsTrend = calculateTrend(currCancellations.toDouble(), prevCancellations.toDouble()),
+            checkInsTrend = calculateTrend(currCheckIns.toDouble(), prevCheckIns.toDouble()),
+            checkOutsTrend = calculateTrend(currCheckOuts.toDouble(), prevCheckOuts.toDouble()),
+            noShowsTrend = calculateTrend(currNoShows.toDouble(), prevNoShows.toDouble()),
+            rejectedTrend = calculateTrend(currRejected.toDouble(), prevRejected.toDouble())
+        )
     }
 
     private fun calculateTrend(current: Double, previous: Double?): Pair<TrendType, String> {
-        // If no previous data, return empty trend (no display)
+
         if (previous == null || previous == 0.0) {
             return Pair(TrendType.NEUTRAL, "")
         }
 
         val percentageChange = ((current - previous) / previous) * 100
 
-        // If change is negligible (less than 0.5%), return empty trend
+
         if (percentageChange.absoluteValue < 0.5) {
             return Pair(TrendType.NEUTRAL, "")
         }
@@ -480,27 +487,26 @@ class DashboardViewModel @Inject constructor(
             else -> TrendType.NEUTRAL
         }
 
-        val trendValue = when {
-            percentageChange.absoluteValue >= 100 -> {
-                if (percentageChange >= 0) "+${percentageChange.toInt()}%"
-                else "${percentageChange.toInt()}%"
-            }
-            percentageChange.absoluteValue >= 10 -> {
-                if (percentageChange >= 0) "+${percentageChange.toInt()}%"
-                else "${percentageChange.toInt()}%"
-            }
+        val trendValue = formatPercentageChange(percentageChange)
+
+        return Pair(trend, trendValue)
+    }
+
+    private fun formatPercentageChange(change: Double): String {
+        val absChange = change.absoluteValue
+        val prefix = if (change >= 0) "+" else ""
+
+        return when {
+            absChange >= 100 -> "$prefix${change.toInt()}%"
+            absChange >= 10 -> "$prefix${change.toInt()}%"
             else -> {
-                val rounded = (percentageChange * 10).toInt() / 10.0
+                val rounded = (change * 10).toInt() / 10.0
                 if (rounded == rounded.toInt().toDouble()) {
-                    if (percentageChange >= 0) "+${rounded.toInt()}%"
-                    else "${rounded.toInt()}%"
+                    "$prefix${rounded.toInt()}%"
                 } else {
-                    if (percentageChange >= 0) "+${"%.1f".format(rounded)}%"
-                    else "${"%.1f".format(rounded)}%"
+                    "$prefix${"%.1f".format(rounded)}%"
                 }
             }
         }
-
-        return Pair(trend, trendValue)
     }
 }

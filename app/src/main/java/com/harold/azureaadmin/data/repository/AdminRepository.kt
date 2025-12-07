@@ -43,6 +43,7 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import retrofit2.Response
 import java.io.File
 import java.io.FileOutputStream
@@ -252,8 +253,11 @@ class AdminRepository @Inject constructor(
         val imageParts = images?.mapNotNull { uri ->
             val file = createFileFromUri(context, uri)
             file?.let {
-                val reqFile = it.asRequestBody("image/*".toMediaTypeOrNull())
-                MultipartBody.Part.createFormData("images", it.name, reqFile)
+                MultipartBody.Part.createFormData(
+                    "images",
+                    it.name,
+                    it.asRequestBody("image/*".toMediaTypeOrNull())
+                )
             }
         } ?: emptyList()
 
@@ -273,23 +277,52 @@ class AdminRepository @Inject constructor(
             existingImages = existingImageParts
         )
 
-        images?.forEach { uri -> createFileFromUri(context, uri)?.delete() }
+        images?.forEach { uri ->
+            createFileFromUri(context, uri)?.delete()
+        }
 
         if (response.isSuccessful) {
-            return response.body()?.data ?: throw Exception("Empty response when editing area")
+            return response.body()?.data
+                ?: throw Exception("Empty response when editing area")
         } else {
-            throw Exception("Error editing area: ${response.code()} - ${response.errorBody()?.string()}")
+            val errorBody = response.errorBody()?.string()
+
+            val errorMessage = try {
+                val json = JSONObject(errorBody ?: "{}")
+                json.optString(
+                    "message",
+                    json.optString("error", "Something went wrong")
+                )
+            } catch (e: Exception) {
+                "Something went wrong"
+            }
+
+            throw Exception(errorMessage)
         }
     }
+
 
     suspend fun deleteArea(areaId: Int): String {
         val response = api.deleteArea(areaId)
+
         if (response.isSuccessful) {
             return response.body()?.message ?: "Area deleted"
         } else {
-            throw Exception("Error deleting area: ${response.code()}")
+            // Read the error JSON coming from Django
+            val errorBody = response.errorBody()?.string()
+
+            val errorMessage = try {
+                val json = JSONObject(errorBody ?: "{}")
+                // backend uses either "message" or "error"
+                json.optString("message", json.optString("error", "Something went wrong"))
+            } catch (e: Exception) {
+                "Something went wrong"
+            }
+
+            throw Exception(errorMessage)
         }
     }
+
 
     // ROOMS
 
@@ -430,12 +463,26 @@ class AdminRepository @Inject constructor(
 
     suspend fun deleteRoom(roomId: Int): String {
         val response = api.deleteRoom(roomId)
+
         if (response.isSuccessful) {
             return response.body()?.message ?: "Room deleted"
         } else {
-            throw Exception("Error deleting room: ${response.code()}")
+            val errorBody = response.errorBody()?.string()
+
+            val errorMessage = try {
+                val json = JSONObject(errorBody ?: "{}")
+                json.optString(
+                    "message",
+                    json.optString("error", "Something went wrong")
+                )
+            } catch (e: Exception) {
+                "Something went wrong"
+            }
+
+            throw Exception(errorMessage)
         }
     }
+
 
     // AMENITIES
 

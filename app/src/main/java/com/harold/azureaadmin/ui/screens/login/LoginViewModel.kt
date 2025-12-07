@@ -7,6 +7,7 @@ import com.harold.azureaadmin.data.models.AdminLoginResponse
 import com.harold.azureaadmin.data.repository.AdminRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -28,46 +29,63 @@ class LoginViewModel @Inject constructor(
     val loginState: StateFlow<LoginState> get() = _loginState
 
     fun login(email: String, password: String) {
+        if (email.isBlank() || password.isBlank()) {
+            _loginState.value = LoginState.Error("Email and password are required")
+            return
+        }
+
         viewModelScope.launch {
             _loginState.value = LoginState.Loading
 
             try {
                 val response = repo.login(email, password)
 
-                if (response.isSuccessful) {
-                    val body = response.body()
-                    if (body != null) {
-                        val user = body.user
-                        if (user == null) {
-                            _loginState.value = LoginState.Error("Not authenticated")
-                            return@launch
-                        }
-
-                        if (user.role != "admin") {
-                            _loginState.value = LoginState.Error("Only admin can access this app")
-                            return@launch
-                        }
-
-                        body.access_token?.let { token ->
-                            dataStore.saveToken(token)
-                        }
-
-                        _loginState.value = LoginState.Success(body)
-                    } else {
-                        _loginState.value = LoginState.Error("Login failed: Empty response")
+                if (!response.isSuccessful) {
+                    _loginState.value = when (response.code()) {
+                        401 -> LoginState.Error("Invalid email or password")
+                        else -> LoginState.Error("Login failed: ${response.code()}")
                     }
-                } else {
-                    if (response.code() == 401) {
-                        _loginState.value = LoginState.Error("Invalid email or password")
-                    } else {
-                        _loginState.value =
-                            LoginState.Error("Login failed: ${response.code()}")
+                    return@launch
+                }
+
+                val body = response.body()
+                if (body == null) {
+                    _loginState.value = LoginState.Error("Unexpected empty response")
+                    return@launch
+                }
+
+                val user = body.user
+                if (user == null) {
+                    _loginState.value = LoginState.Error("Not authenticated")
+                    return@launch
+                }
+
+                if (user.role != "admin") {
+                    _loginState.value = LoginState.Error("Only admin can access this app")
+                    return@launch
+                }
+
+                // Save token on IO thread
+                body.access_token?.let { token ->
+                    viewModelScope.launch(Dispatchers.IO) {
+                        dataStore.saveToken(token)
                     }
                 }
+
+                _loginState.value = LoginState.Success(body)
+
             } catch (e: Exception) {
-                _loginState.value =
-                    LoginState.Error(e.localizedMessage ?: "Network error occurred")
+                val msg = when (e) {
+                    is java.net.SocketTimeoutException -> "Connection timed out. Please try again."
+                    is java.net.UnknownHostException -> "No internet connection."
+                    is java.net.ConnectException -> "Unable to reach server."
+                    else -> "Something went wrong: ${e.message}"
+                }
+
+                _loginState.value = LoginState.Error(msg)
             }
+
         }
     }
 }
+

@@ -9,8 +9,10 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.Cookie
@@ -44,7 +46,26 @@ object NetworkModule {
         dataStore: DataStoreManager,
         gson: Gson
     ): CookieJar {
-        val cookieStore = mutableMapOf<String, List<Cookie>>()
+
+        var memoryCookieCache: MutableMap<String, List<Cookie>> = mutableMapOf()
+        var isLoadedFromDisk = false
+
+        // Preload cookies once in background
+        CoroutineScope(Dispatchers.IO).launch {
+            val savedJson = dataStore.getCookie.firstOrNull()
+            if (!savedJson.isNullOrEmpty()) {
+                val type = object : TypeToken<List<String>>() {}.type
+                val cookieStrings: List<String> = gson.fromJson(savedJson, type)
+
+                val cookies = cookieStrings.mapNotNull { raw ->
+                    // use dummy url host because the actual host will load later
+                    Cookie.parse(HttpUrl.Builder().scheme("http").host("dummy").build(), raw)
+                }
+
+                memoryCookieCache["preload"] = cookies
+            }
+            isLoadedFromDisk = true
+        }
 
         return object : CookieJar {
 
@@ -52,37 +73,41 @@ object NetworkModule {
                 if (cookies.isEmpty()) return
 
                 val valid = cookies.filter { it.expiresAt > System.currentTimeMillis() }
-                cookieStore[url.host] = valid
+
+                memoryCookieCache[url.host] = valid
 
                 val json = gson.toJson(valid.map { it.toString() })
 
-                runBlocking {
-                    withContext(Dispatchers.IO) {
-                        dataStore.saveCookie(json)
-                    }
+                CoroutineScope(Dispatchers.IO).launch {
+                    dataStore.saveCookie(json)
                 }
             }
 
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
-                cookieStore[url.host]?.let { stored ->
-                    return stored.filter { it.expiresAt > System.currentTimeMillis() }
+
+                // If Memory already has cookies for this host
+                memoryCookieCache[url.host]?.let { list ->
+                    return list.filter { it.expiresAt > System.currentTimeMillis() }
                 }
 
-                val saved = runBlocking { dataStore.getCookie.firstOrNull() }
-                if (saved.isNullOrEmpty()) return emptyList()
+                // If not loaded from disk yet, return empty and soon the preload fills memory
+                if (!isLoadedFromDisk) return emptyList()
 
-                val type = object : TypeToken<List<String>>() {}.type
-                val cookieStrings: List<String> = gson.fromJson(saved, type)
+                // If we preloaded cookies, rebind them to this host
+                memoryCookieCache["preload"]?.let { preloadCookies ->
+                    val updated = preloadCookies.mapNotNull { stored ->
+                        Cookie.parse(url, stored.toString())
+                    }
+                    memoryCookieCache[url.host] = updated
+                    return updated
+                }
 
-                val parsed = cookieStrings.mapNotNull { Cookie.parse(url, it) }
-                    .filter { it.expiresAt > System.currentTimeMillis() }
-
-                if (parsed.isNotEmpty()) cookieStore[url.host] = parsed
-
-                return parsed
+                return emptyList()
             }
         }
     }
+
+
 
     @Provides
     @Singleton
@@ -93,9 +118,9 @@ object NetworkModule {
         OkHttpClient.Builder()
             .addInterceptor(logging)
             .cookieJar(cookieJar)
-            .connectTimeout(60, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
             .build()
 
     @Provides

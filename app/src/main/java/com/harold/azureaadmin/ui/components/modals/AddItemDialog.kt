@@ -43,6 +43,7 @@ import androidx.compose.ui.window.DialogProperties
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -50,18 +51,20 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import com.harold.azureaadmin.ui.components.button.DropdownField
 import com.harold.azureaadmin.ui.screens.admin.amenities.AmenitiesViewModel
+import com.harold.azureaadmin.utils.compressImage
 import com.harold.azureaadmin.utils.validateRoomInputs
 
 //private val ValidationResult.errors: Map<String, String>
 //private val ValidationResult.isValid: Boolean
-
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,35 +78,32 @@ fun AddItemDialog(
 ) {
     if (!show) return
 
-
     val inputs = remember { mutableStateMapOf<String, String>() }
-    val selectedAmenities = remember { mutableStateOf(setOf<String>()) }
     var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var validationErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val selectedAmenities = remember { mutableStateOf(setOf<String>()) }
 
-    // Fetch amenities when dialog is shown
     LaunchedEffect(show) {
-        if (type == ItemType.ROOM) {
-            viewModel.fetchAmenities()
-        }
-        // Reset validation errors when dialog is shown
+        if (type == ItemType.ROOM) viewModel.fetchAmenities()
         validationErrors = emptyMap()
     }
 
     val amenities by viewModel.amenities.collectAsState()
 
+    val context = LocalContext.current
+
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents(),
         onResult = { uris ->
             if (uris.isNotEmpty()) {
-                selectedImageUris = uris
-                // Clear image validation error when images are selected
-                if (validationErrors.containsKey("Images")) {
-                    validationErrors = validationErrors.filterKeys { it != "Images" }
-                }
+                selectedImageUris = uris.map { compressImage(context, it) }
+                validationErrors -= "Images"
             }
         }
     )
+
+
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -111,28 +111,12 @@ fun AddItemDialog(
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(0.dp),
-            color = Color.White,
-            tonalElevation = 0.dp
+            color = Color.White
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            "Add New ${if (type == ItemType.ROOM) "Room" else "Area"}",
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = "Close")
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.White,
-                        titleContentColor = Color.Black,
-                        navigationIconContentColor = Color.Black
-                    )
+            Column {
+                DialogTopBar(
+                    title = "Add New ${if (type == ItemType.ROOM) "Room" else "Area"}",
+                    onDismiss = onDismiss
                 )
 
                 Column(
@@ -140,246 +124,81 @@ fun AddItemDialog(
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = inputs["Name"] ?: "",
-                        onValueChange = {
-                            inputs["Name"] = it
-                            if (validationErrors.containsKey("Name")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Name" }
-                            }
-                        },
-                        label = { Text(if (type == ItemType.ROOM) "Room Name" else "Area Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = validationErrors.containsKey("Name"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Name")) {
-                                Text(validationErrors["Name"] ?: "")
-                            }
-                        }
+                    FormTextField(
+                        label = if (type == ItemType.ROOM) "Room Name" else "Area Name",
+                        key = "Name",
+                        inputs = inputs,
+                        validationErrors = validationErrors
                     )
 
                     if (type == ItemType.ROOM) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            DropdownField(
-                                label = "Room Type",
-                                value = inputs["Room Type"] ?: "Premium",
-                                options = listOf("Premium", "Suites"),
-                                onSelect = {
-                                    inputs["Room Type"] = it
-                                    if (validationErrors.containsKey("Room Type")) {
-                                        validationErrors = validationErrors.filterKeys { key -> key != "Room Type" }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                isError = validationErrors.containsKey("Room Type"),
-                                errorMessage = validationErrors["Room Type"]
-                            )
-                            DropdownField(
-                                label = "Bed Type",
-                                value = inputs["Bed Type"] ?: "Single",
-                                options = listOf("Single", "Double", "Twin", "King", "Queen"),
-                                onSelect = {
-                                    inputs["Bed Type"] = it
-                                    if (validationErrors.containsKey("Bed Type")) {
-                                        validationErrors = validationErrors.filterKeys { key -> key != "Bed Type" }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                isError = validationErrors.containsKey("Bed Type"),
-                                errorMessage = validationErrors["Bed Type"]
-                            )
-                        }
+                        RoomSelectors(inputs, validationErrors)
                     }
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = inputs["Capacity"] ?: "",
-                            onValueChange = {
-                                inputs["Capacity"] = it
-                                if (validationErrors.containsKey("Capacity")) {
-                                    validationErrors = validationErrors.filterKeys { key -> key != "Capacity" }
-                                }
-                            },
-                            label = { Text(if (type == ItemType.ROOM) "Max Guests" else "Capacity") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
+                        FormTextField(
+                            label = if (type == ItemType.ROOM) "Max Guests" else "Capacity",
+                            key = "Capacity",
+                            inputs = inputs,
+                            validationErrors = validationErrors,
                             modifier = Modifier.weight(1f),
-                            isError = validationErrors.containsKey("Capacity"),
-                            supportingText = {
-                                if (validationErrors.containsKey("Capacity")) {
-                                    Text(validationErrors["Capacity"] ?: "")
-                                }
-                            }
+                            numberOnly = true
                         )
-                        OutlinedTextField(
-                            value = inputs["Price"] ?: "",
-                            onValueChange = {
-                                inputs["Price"] = it
-                                if (validationErrors.containsKey("Price")) {
-                                    validationErrors = validationErrors.filterKeys { key -> key != "Price" }
-                                }
-                            },
-                            label = { Text(if (type == ItemType.ROOM) "Price(₱)" else "Price(₱)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
+                        FormTextField(
+                            label = "Price (₱)",
+                            key = "Price",
+                            inputs = inputs,
+                            validationErrors = validationErrors,
                             modifier = Modifier.weight(1f),
-                            isError = validationErrors.containsKey("Price"),
-                            supportingText = {
-                                if (validationErrors.containsKey("Price")) {
-                                    Text(validationErrors["Price"] ?: "")
-                                }
-                            }
+                            numberOnly = true
                         )
                     }
 
-                    OutlinedTextField(
-                        value = inputs["Description"] ?: "",
-                        onValueChange = {
-                            inputs["Description"] = it
-                            if (validationErrors.containsKey("Description")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Description" }
-                            }
-                        },
-                        label = { Text("Description") },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 100.dp),
-                        maxLines = 3,
-                        isError = validationErrors.containsKey("Description"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Description")) {
-                                Text(validationErrors["Description"] ?: "")
-                            }
-                        }
+                    FormTextField(
+                        label = "Description",
+                        key = "Description",
+                        inputs = inputs,
+                        validationErrors = validationErrors,
+                        multiLine = true
                     )
 
-                    OutlinedTextField(
-                        value = inputs["Discount"] ?: "",
-                        onValueChange = {
-                            inputs["Discount"] = it
-                            if (validationErrors.containsKey("Discount")) {
-                                validationErrors = validationErrors.filterKeys { key -> key != "Discount" }
-                            }
-                        },
-                        label = { Text("Discount (%)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = validationErrors.containsKey("Discount"),
-                        supportingText = {
-                            if (validationErrors.containsKey("Discount")) {
-                                Text(validationErrors["Discount"] ?: "")
-                            }
-                        }
+                    FormTextField(
+                        label = "Discount (%)",
+                        key = "Discount",
+                        inputs = inputs,
+                        validationErrors = validationErrors,
+                        numberOnly = true
                     )
 
-                    // Image Upload Section
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(
-                            onClick = { imagePickerLauncher.launch("image/*") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Upload Images (${selectedImageUris.size} selected)")
-                        }
-
-                        // Display selected images
-                        if (selectedImageUris.isNotEmpty()) {
-                            LazyRow(
-                                modifier = Modifier.padding(top = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(selectedImageUris) { uri ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(100.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    ) {
-                                        androidx.compose.foundation.Image(
-                                            painter = rememberAsyncImagePainter(uri),
-                                            contentDescription = "Selected Image",
-                                            contentScale = ContentScale.Crop,
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-
-                                        IconButton(
-                                            onClick = {
-                                                selectedImageUris = selectedImageUris.filter { it != uri }
-                                            },
-                                            modifier = Modifier
-                                                .align(Alignment.TopEnd)
-                                                .background(Color.White.copy(alpha = 0.7f), shape = CircleShape)
-                                                .size(20.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Remove Image",
-                                                tint = Color.Black,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Image validation error
-                        if (validationErrors.containsKey("Images")) {
-                            Text(
-                                text = validationErrors["Images"] ?: "",
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
+                    ImagePickerSection(
+                        selectedImageUris = selectedImageUris,
+                        validationErrors = validationErrors,
+                        onPickImages = { imagePickerLauncher.launch("image/*") },
+                        onRemoveImage = { uri -> selectedImageUris -= uri }
+                    )
 
                     if (type == ItemType.ROOM) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                "Amenities",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Medium
-                            )
-                            amenities.forEach { amenity ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = amenity.description in selectedAmenities.value,
-                                        onCheckedChange = {
-                                            selectedAmenities.value =
-                                                if (it) selectedAmenities.value + amenity.description
-                                                else selectedAmenities.value - amenity.description
-                                            if (validationErrors.containsKey("Amenities")) {
-                                                validationErrors = validationErrors.filterKeys { key -> key != "Amenities" }
-                                            }
-                                        }
-                                    )
-                                    Text(amenity.description)
-                                }
-                            }
-                            // Amenities validation error
-                            if (validationErrors.containsKey("Amenities")) {
-                                Text(
-                                    text = validationErrors["Amenities"] ?: "",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
+                        AmenitiesSection(
+                            amenities = amenities.map { it.description },
+                            selectedAmenities = selectedAmenities,
+                            validationErrors = validationErrors
+                        )
                     }
                 }
 
-                Button(
+                SaveButton(
+                    label = "Create ${if (type == ItemType.ROOM) "Room" else "Area"}",
                     onClick = {
-                        val validation = validateRoomInputs(inputs, selectedAmenities.value, selectedImageUris)
+                        val validation = validateRoomInputs(
+                            inputs,
+                            selectedAmenities.value,
+                            selectedImageUris
+                        )
+
                         if (validation.isValid) {
-                            onSave(inputs, selectedAmenities.value.toList(), selectedImageUris.takeIf { it.isNotEmpty() })
-                            // Reset form
+                            onSave(inputs, selectedAmenities.value.toList(), selectedImageUris)
                             inputs.clear()
                             selectedAmenities.value = emptySet()
                             selectedImageUris = emptyList()
@@ -388,16 +207,193 @@ fun AddItemDialog(
                         } else {
                             validationErrors = validation.errors
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Create ${if (type == ItemType.ROOM) "Room" else "Area"}")
-                }
+                    }
+                )
             }
         }
     }
 }
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DialogTopBar(title: String, onDismiss: () -> Unit) {
+    TopAppBar(
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        navigationIcon = {
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Default.Close, contentDescription = "Close")
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.White,
+            titleContentColor = Color.Black
+        )
+    )
+}
+
+
+
+@Composable
+fun FormTextField(
+    label: String,
+    key: String,
+    inputs: MutableMap<String, String>,
+    validationErrors: Map<String, String>,
+    modifier: Modifier = Modifier.fillMaxWidth(),
+    numberOnly: Boolean = false,
+    multiLine: Boolean = false
+) {
+    OutlinedTextField(
+        value = inputs[key] ?: "",
+        onValueChange = {
+            inputs[key] = it
+            validationErrors - key
+        },
+        label = { Text(label.replaceFirstChar { it.uppercase() }) },
+        keyboardOptions = if (numberOnly) KeyboardOptions(keyboardType = KeyboardType.Number) else KeyboardOptions.Default,
+        singleLine = !multiLine,
+        maxLines = if (multiLine) 3 else 1,
+        isError = validationErrors.containsKey(key),
+        supportingText = {
+            validationErrors[key]?.let { Text(it) }
+        },
+        modifier = modifier
+    )
+}
+
+
+@Composable
+fun RoomSelectors(inputs: MutableMap<String, String>, validationErrors: Map<String, String>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        DropdownField(
+            label = "Room Type",
+            value = inputs["Room Type"] ?: "Premium",
+            options = listOf("Premium", "Suites"),
+            onSelect = { inputs["Room Type"] = it },
+            modifier = Modifier.weight(1f),
+            isError = validationErrors.containsKey("Room Type"),
+            errorMessage = validationErrors["Room Type"]
+        )
+
+        DropdownField(
+            label = "Bed Type",
+            value = inputs["Bed Type"] ?: "Single",
+            options = listOf("Single", "Double", "Twin", "King", "Queen"),
+            onSelect = { inputs["Bed Type"] = it },
+            modifier = Modifier.weight(1f),
+            isError = validationErrors.containsKey("Bed Type"),
+            errorMessage = validationErrors["Bed Type"]
+        )
+    }
+}
+
+
+@Composable
+fun ImagePickerSection(
+    selectedImageUris: List<Uri>,
+    validationErrors: Map<String, String>,
+    onPickImages: () -> Unit,
+    onRemoveImage: (Uri) -> Unit
+) {
+    Column {
+        OutlinedButton(
+            onClick = onPickImages,
+            modifier = Modifier.fillMaxWidth().height(60.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("Upload Images (${selectedImageUris.size} selected)")
+        }
+
+        LazyRow(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(selectedImageUris) { uri ->
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(uri),
+                        contentDescription = "Selected Image",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    IconButton(
+                        onClick = { onRemoveImage(uri) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .background(Color.White.copy(alpha = 0.7f), CircleShape)
+                            .size(20.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove",
+                            tint = Color.Black,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        validationErrors["Images"]?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+
+@Composable
+fun AmenitiesSection(
+    amenities: List<String>,
+    selectedAmenities: MutableState<Set<String>>,
+    validationErrors: Map<String, String>
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Amenities", fontWeight = FontWeight.Medium)
+
+        amenities.forEach { amenity ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = amenity in selectedAmenities.value,
+                    onCheckedChange = { isChecked ->
+                        selectedAmenities.value =
+                            if (isChecked) selectedAmenities.value + amenity
+                            else selectedAmenities.value - amenity
+                    }
+                )
+                Text(amenity)
+            }
+        }
+
+        validationErrors["Amenities"]?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+
+@Composable
+fun SaveButton(label: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(label)
+    }
+}
+
 

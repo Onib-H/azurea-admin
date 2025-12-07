@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class ArchivedUsersViewModel@Inject constructor(
+class ArchivedUsersViewModel @Inject constructor(
     private val repository: AdminRepository
 ) : ViewModel() {
 
@@ -28,7 +28,6 @@ class ArchivedUsersViewModel@Inject constructor(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
-    // Add these new state flows
     private val _restoreSuccess = MutableStateFlow<String?>(null)
     val restoreSuccess: StateFlow<String?> = _restoreSuccess
 
@@ -40,61 +39,47 @@ class ArchivedUsersViewModel@Inject constructor(
 
     fun fetchArchivedUsers(page: Int = 1) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
+
             _loading.value = true
+            _error.value = null
+
             try {
-                val response = repository.fetchAllArchivedUsers(page, pageSize)
-                if (response.isSuccessful) {
-                    response.body()?.let { usersResponse ->
-                        _users.value = usersResponse.users
-                        _pagination.value = usersResponse.pagination
-                        currentPage = page
-                    }
-                    _error.value = null
-                } else {
-                    _error.value = "Failed to fetch archived users: ${response.code()}"
+                val res = repository.fetchAllArchivedUsers(page, pageSize)
+                val body = res.body() ?: return@launch run {
+                    _error.value = "No data"
                 }
+
+                _users.value = body.users
+                _pagination.value = body.pagination
+                currentPage = page
+
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Unknown error"
-            } finally {
-                _loading.value = false
+                _error.value = e.localizedMessage
             }
+
+            _loading.value = false
         }
     }
 
-    fun loadNextPage() {
-        _pagination.value?.let { pagination ->
-            if (currentPage < pagination.total_pages) {
-                fetchArchivedUsers(currentPage + 1)
-            }
-        }
-    }
-
-    fun loadPreviousPage() {
-        if (currentPage > 1) {
-            fetchArchivedUsers(currentPage - 1)
-        }
-    }
-
-    // Add this new method
     fun restoreUser(userId: Int) {
         viewModelScope.launch {
             try {
-                val response = repository.restoreUser(userId)
-                if (response.isSuccessful) {
-                    _restoreSuccess.value = "User restored successfully"
-                    // Remove the user from the current list
-                    _users.value = _users.value.filter { it.id != userId }
-                    _restoreError.value = null
-                } else {
-                    _restoreError.value = "Failed to restore user: ${response.code()}"
+                val res = repository.restoreUser(userId)
+                if (!res.isSuccessful) {
+                    _restoreError.value = "Failed: ${res.code()}"
+                    return@launch
                 }
+
+                _users.value = _users.value.filterNot { it.id == userId }
+                _restoreSuccess.value = "User restored"
+
             } catch (e: Exception) {
-                _restoreError.value = e.localizedMessage ?: "Unknown error"
+                _restoreError.value = e.localizedMessage
             }
         }
     }
 
-    // Add method to clear messages
     fun clearRestoreMessages() {
         _restoreSuccess.value = null
         _restoreError.value = null

@@ -31,17 +31,21 @@ class AreasViewModel @Inject constructor(
 
     fun fetchAreas() {
         viewModelScope.launch {
+            if (_loading.value) return@launch
+
             _loading.value = true
+            _error.value = null
+
             try {
                 _areas.value = repository.getAreas()
-                _error.value = null
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Unknown error"
-            } finally {
-                _loading.value = false
+                _error.value = e.localizedMessage ?: "Unable to load areas"
             }
+
+            _loading.value = false
         }
     }
+
 
     fun addArea(
         name: String,
@@ -53,6 +57,7 @@ class AreasViewModel @Inject constructor(
         context: Context
     ) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
                 val newArea = repository.addArea(
@@ -64,7 +69,7 @@ class AreasViewModel @Inject constructor(
                     images = images,
                     context = context
                 )
-                _areas.value = repository.getAreas() // refresh list
+                _areas.value = _areas.value + newArea
                 _error.value = null
                 println("Add success: ${newArea.area_name}")
             } catch (e: Exception) {
@@ -77,6 +82,7 @@ class AreasViewModel @Inject constructor(
 
     fun showArea(areaId: Int) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
                 val areaDetail = repository.showArea(areaId)
@@ -102,12 +108,20 @@ class AreasViewModel @Inject constructor(
         pricePerHour: String,
         discountPercent: Int,
         images: List<Uri>,
-        existingImages: List<String>, // Added this parameter
+        existingImages: List<String>,
         context: Context
     ) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
+                // Validate discount_percent before sending
+                if (discountPercent < 0 || discountPercent > 99) {
+                    _error.value = "Discount must be between 0 and 99"
+                    _loading.value = false
+                    return@launch
+                }
+
                 val editedArea = repository.editArea(
                     areaId = areaId,
                     name = name,
@@ -117,15 +131,23 @@ class AreasViewModel @Inject constructor(
                     pricePerHour = pricePerHour,
                     discountPercent = discountPercent,
                     images = images,
-                    existingImages = existingImages, // Pass the existing images parameter
+                    existingImages = existingImages,
                     context = context
                 )
-                _areas.value = repository.getAreas() // refresh list
+                _areas.value = _areas.value.map { if (it.id == areaId) editedArea else it }
                 _error.value = null
                 println("Edit success: ${editedArea.area_name}")
             } catch (e: Exception) {
-                _error.value = e.localizedMessage ?: "Error editing area"
-                println("Edit error: ${e.localizedMessage}")
+                // Handle specific error for maintenance status with active bookings
+                val errorMessage = e.localizedMessage ?: "Error editing area"
+                _error.value = when {
+                    errorMessage.contains("Cannot change status to maintenance") ->
+                        "Cannot set area to maintenance - there are active or reserved bookings"
+                    errorMessage.contains("Discount must be between") ->
+                        "Discount must be between 0 and 99"
+                    else -> errorMessage
+                }
+                println("Edit error: ${_error.value}")
             } finally {
                 _loading.value = false
             }
@@ -135,12 +157,12 @@ class AreasViewModel @Inject constructor(
 
     fun deleteArea(id: Int) {
         viewModelScope.launch {
+            if (_loading.value) return@launch
             _loading.value = true
             try {
                 val message = repository.deleteArea(id)
-                _areas.value = repository.getAreas()
+                _areas.value = _areas.value.filterNot { it.id == id }
                 _error.value = null
-                println("Delete success: $message")
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Error deleting area"
             } finally {
