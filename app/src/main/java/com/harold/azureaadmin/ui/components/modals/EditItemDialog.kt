@@ -8,12 +8,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,10 +60,18 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.harold.azureaadmin.data.models.Amenity
 import com.harold.azureaadmin.ui.components.button.DropdownField
+import com.harold.azureaadmin.utils.calculateTotalSizeKB
+import com.harold.azureaadmin.utils.clearCompressedImageCache
 import com.harold.azureaadmin.utils.compressImage
 import com.harold.azureaadmin.utils.validateRoomInputs
+import kotlinx.coroutines.launch
+import com.harold.azureaadmin.utils.compressMultipleImages
 
 
+// Updated EditItemDialog with improved image compression
+// Updated EditItemDialog with improved image compression
+// Updated EditItemDialog with improved image compression
+// Updated EditItemDialog with improved image compression
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditItemDialog(
@@ -82,6 +94,10 @@ fun EditItemDialog(
     val selectedAmenities = remember {
         mutableStateOf(initialAmenities.map { it.description }.toSet())
     }
+    var isCompressing by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(show) {
         inputs.clear()
@@ -90,20 +106,53 @@ fun EditItemDialog(
         existingImages = initialImages
         newImageUris = emptyList()
         selectedAmenities.value = initialAmenities.map { it.description }.toSet()
+        // Clear old compressed images
+        clearCompressedImageCache(context)
     }
-
-    val context = LocalContext.current
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents(),
         onResult = { uris ->
             if (uris.isNotEmpty()) {
-                newImageUris = uris.map { compressImage(context, it) }
-                validationErrors -= "Images"
+                // Calculate remaining slots (max 10 total images)
+                val remainingSlots = 10 - existingImages.size
+                val limitedUris = uris.take(remainingSlots)
+
+                if (uris.size > remainingSlots) {
+                    validationErrors = validationErrors + ("Images" to "Maximum 10 total images allowed. Only $remainingSlots more can be added.")
+                }
+
+                isCompressing = true
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        val compressedUris = compressMultipleImages(context, limitedUris, maxSizeKB = 350)
+                        val totalSizeKB = calculateTotalSizeKB(context, compressedUris)
+
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            // Calculate existing images size (estimate ~250KB each if from server)
+                            val estimatedExistingSize = existingImages.size * 250
+                            val totalEstimatedSize = estimatedExistingSize + totalSizeKB
+
+                            if (totalEstimatedSize > 10240) { // 10MB limit
+                                validationErrors = validationErrors + ("Images" to "Total image size would exceed 10MB. Remove some existing images or select fewer new ones.")
+                            } else {
+                                newImageUris = compressedUris
+                                if (uris.size <= remainingSlots) {
+                                    validationErrors = validationErrors - "Images"
+                                }
+                            }
+                            isCompressing = false
+                        }
+                    } catch (e: Exception) {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            validationErrors = validationErrors + ("Images" to "Error compressing images: ${e.message}")
+                            isCompressing = false
+                        }
+                    }
+                }
             }
         }
     )
-
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -123,8 +172,6 @@ fun EditItemDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-
-                    // Name field
                     FormTextField(
                         label = if (type == ItemType.ROOM) "Room Name" else "Area Name",
                         key = "Name",
@@ -132,7 +179,6 @@ fun EditItemDialog(
                         validationErrors = validationErrors
                     )
 
-                    // Room-only dropdowns
                     if (type == ItemType.ROOM) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             DropdownField(
@@ -154,11 +200,9 @@ fun EditItemDialog(
                                 isError = validationErrors.containsKey("Bed Type"),
                                 errorMessage = validationErrors["Bed Type"]
                             )
-
                         }
                     }
 
-                    // Capacity + Status
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FormTextField(
                             label = "Capacity",
@@ -177,10 +221,8 @@ fun EditItemDialog(
                             isError = validationErrors.containsKey("Status"),
                             errorMessage = validationErrors["Status"]
                         )
-
                     }
 
-                    // Price
                     FormTextField(
                         label = "Price (₱)",
                         key = "Price",
@@ -189,7 +231,6 @@ fun EditItemDialog(
                         numberOnly = true
                     )
 
-                    // Description
                     FormTextField(
                         label = "Description",
                         key = "Description",
@@ -198,7 +239,6 @@ fun EditItemDialog(
                         multiLine = true
                     )
 
-                    // Discount
                     FormTextField(
                         label = "Discount (%)",
                         key = "Discount",
@@ -207,17 +247,16 @@ fun EditItemDialog(
                         numberOnly = true
                     )
 
-                    // Images section
                     EditImagesSection(
                         existingImages = existingImages,
                         newImageUris = newImageUris,
                         validationErrors = validationErrors,
+                        isCompressing = isCompressing,
                         onRemoveExisting = { url -> existingImages = existingImages - url },
                         onRemoveNew = { uri -> newImageUris = newImageUris - uri },
                         onPickImages = { imagePickerLauncher.launch("image/*") }
                     )
 
-                    // Amenities
                     if (type == ItemType.ROOM) {
                         AmenitiesSection(
                             amenities = availableAmenities.map { it.description },
@@ -229,13 +268,15 @@ fun EditItemDialog(
 
                 SaveButton(
                     label = "Save Changes",
+                    enabled = !isCompressing,
                     onClick = {
                         val hasImages = existingImages.isNotEmpty() || newImageUris.isNotEmpty()
 
                         val validation = validateRoomInputs(
                             inputs,
                             selectedAmenities.value,
-                            if (hasImages) listOf(Uri.EMPTY) else emptyList() // simulate presence
+                            if (hasImages) listOf(Uri.EMPTY) else emptyList(),
+                            availableAmenities.map { it.description }
                         )
 
                         if (validation.isValid) {
@@ -251,22 +292,30 @@ fun EditItemDialog(
     }
 }
 
+// Updated EditImagesSection with loading state
 @Composable
 fun EditImagesSection(
     existingImages: List<String>,
     newImageUris: List<Uri>,
     validationErrors: Map<String, String>,
+    isCompressing: Boolean = false,
     onRemoveExisting: (String) -> Unit,
     onRemoveNew: (Uri) -> Unit,
     onPickImages: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-
         Text("Images", fontWeight = FontWeight.Medium)
 
         if (existingImages.isNotEmpty()) {
-            Text("Current Images:", modifier = Modifier.padding(top = 8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Current Images (${existingImages.size}):",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
                 items(existingImages) { url ->
                     ImagePreviewBox(
                         painter = rememberAsyncImagePainter(url),
@@ -278,14 +327,32 @@ fun EditImagesSection(
 
         OutlinedButton(
             onClick = onPickImages,
+            enabled = !isCompressing,
             modifier = Modifier.fillMaxWidth().height(60.dp).padding(top = 8.dp)
         ) {
-            Text("Add New Images (${newImageUris.size} selected)")
+            if (isCompressing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Compressing images...")
+            } else {
+                Text("Add New Images (${newImageUris.size} selected)")
+            }
         }
 
         if (newImageUris.isNotEmpty()) {
-            Text("New Images:", modifier = Modifier.padding(top = 8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "New Images (${newImageUris.size}):",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
                 items(newImageUris) { uri ->
                     ImagePreviewBox(
                         painter = rememberAsyncImagePainter(uri),
@@ -296,11 +363,15 @@ fun EditImagesSection(
         }
 
         validationErrors["Images"]?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }
-
 
 @Composable
 fun ImagePreviewBox(

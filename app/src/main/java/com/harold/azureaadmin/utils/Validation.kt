@@ -6,10 +6,11 @@ import com.harold.azureaadmin.data.models.ValidationResult
 fun validateRoomInputs(
     inputs: Map<String, String>,
     selectedAmenities: Set<String>,
-    selectedImageUris: List<Uri>
+    selectedImageUris: List<Uri>,
+    availableAmenities: List<String>
 ): ValidationResult {
-    val errors = mutableMapOf<String, String>()
 
+    val errors = mutableMapOf<String, String>()
     val isRoom = inputs.containsKey("Room Type")
 
     // Name validation
@@ -22,17 +23,17 @@ fun validateRoomInputs(
         errors["Name"] = "Name must not exceed 50 characters"
     }
 
-    // Room Type validation (for rooms only)
+    // Room Type validation
     if (isRoom && inputs["Room Type"].isNullOrBlank()) {
         errors["Room Type"] = "Room type is required"
     }
 
-    // Bed Type validation (for rooms only)
+    // Bed Type validation
     if (isRoom && inputs["Bed Type"].isNullOrBlank()) {
         errors["Bed Type"] = "Bed type is required"
     }
 
-    // Capacity / Max Guests validation
+    // Capacity / Max Guests
     val capacityStr = inputs["Capacity"]?.trim()
     if (capacityStr.isNullOrBlank()) {
         errors["Capacity"] = "Capacity is required"
@@ -59,14 +60,12 @@ fun validateRoomInputs(
             errors["Price"] = "Must be a valid amount"
         } else if (price <= 0) {
             errors["Price"] = "Must be greater than 0"
-        } else if (isRoom && price > 1000000.0) {
-            errors["Price"] = "Cannot exceed ₱1,000,000"
-        } else if (!isRoom && price > 1000000.0) {
+        } else if (price > 1000000.0) {
             errors["Price"] = "Cannot exceed ₱1,000,000"
         }
     }
 
-    // Description validation (optional)
+    // Description (optional)
     val description = inputs["Description"]?.trim()
     if (!description.isNullOrBlank()) {
         if (description.length < 10) {
@@ -76,7 +75,7 @@ fun validateRoomInputs(
         }
     }
 
-    // Discount validation (optional but must be valid if provided)
+    // Discount (optional)
     val discountStr = inputs["Discount"]?.trim()
     if (!discountStr.isNullOrBlank()) {
         val discount = discountStr.toIntOrNull()
@@ -97,8 +96,12 @@ fun validateRoomInputs(
     }
 
     // Amenities validation (for rooms only)
-    if (isRoom && selectedAmenities.isEmpty()) {
-        errors["Amenities"] = "Select at least 1 amenity"
+    if (isRoom) {
+        if (availableAmenities.isEmpty()) {
+            errors["Amenities"] = "Create an amenity first"
+        } else if (selectedAmenities.isEmpty()) {
+            errors["Amenities"] = "Select at least 1 amenity"
+        }
     }
 
     return ValidationResult(errors.isEmpty(), errors)

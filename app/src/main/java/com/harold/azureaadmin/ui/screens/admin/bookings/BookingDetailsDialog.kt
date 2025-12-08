@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.harold.azureaadmin.data.models.BookingDetails
 import com.harold.azureaadmin.ui.components.button.DropdownField
+import com.harold.azureaadmin.ui.components.topbar.AppTopBar
 import com.harold.azureaadmin.ui.theme.AzureaColors
 import com.harold.azureaadmin.utils.FormatDate
 import com.harold.azureaadmin.utils.FormatDateTimeLong
@@ -98,8 +100,10 @@ fun BookingDetailsDialog(
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
 
-                BookingDetailsHeader(onDismiss)
-
+                AppTopBar(
+                    title = "Booking Details",
+                    onBack = { onDismiss }
+                )
 
                 when {
                     loading -> LoadingState()
@@ -486,7 +490,7 @@ private fun PropertyInformationCard(booking: BookingDetails) {
 
             Column {
                 Text(
-                    text = propertyName,
+                    text = "Status: $propertyName",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF333333)
@@ -496,7 +500,10 @@ private fun PropertyInformationCard(booking: BookingDetails) {
                 PropertyChip(propertyType)
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, color = Color(0xFFF0F0F0))
+            Spacer(Modifier.height(12.dp))
+
 
 
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -528,15 +535,13 @@ private fun PropertyInformationCard(booking: BookingDetails) {
                             )
                         }
                     }
-
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(Modifier.height(16.dp))
                 }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Max Guests", fontSize = 12.sp, color = Color(0xFF777777))
                         Spacer(Modifier.height(2.dp))
@@ -625,7 +630,7 @@ private fun BookingInformationCard(booking: BookingDetails) {
             }
 
             Spacer(Modifier.height(12.dp))
-            Divider(color = Color(0xFFF0F0F0))
+            HorizontalDivider(Modifier, DividerDefaults.Thickness, color = Color(0xFFF0F0F0))
             Spacer(Modifier.height(12.dp))
 
             // Dates Grid

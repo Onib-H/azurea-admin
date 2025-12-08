@@ -46,13 +46,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -60,14 +64,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import com.harold.azureaadmin.ui.components.button.DropdownField
 import com.harold.azureaadmin.ui.screens.admin.amenities.AmenitiesViewModel
+import com.harold.azureaadmin.utils.calculateTotalSizeKB
+import com.harold.azureaadmin.utils.clearCompressedImageCache
 import com.harold.azureaadmin.utils.compressImage
 import com.harold.azureaadmin.utils.validateRoomInputs
+import kotlinx.coroutines.launch
+import com.harold.azureaadmin.utils.compressImage
+import com.harold.azureaadmin.utils.compressMultipleImages
 
-//private val ValidationResult.errors: Map<String, String>
-//private val ValidationResult.isValid: Boolean
 
-
-@OptIn(ExperimentalMaterial3Api::class)
+// AddItemDialog - Updated image picker section
+// AddItemDialog - Updated image picker section
 @Composable
 fun AddItemDialog(
     show: Boolean,
@@ -82,28 +89,96 @@ fun AddItemDialog(
     var selectedImageUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var validationErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     val selectedAmenities = remember { mutableStateOf(setOf<String>()) }
+    var isCompressing by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(show) {
         if (type == ItemType.ROOM) viewModel.fetchAmenities()
         validationErrors = emptyMap()
+        // Clear old compressed images when dialog opens
+        clearCompressedImageCache(context)
     }
 
     val amenities by viewModel.amenities.collectAsState()
-
-    val context = LocalContext.current
-
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents(),
         onResult = { uris ->
             if (uris.isNotEmpty()) {
-                selectedImageUris = uris.map { compressImage(context, it) }
-                validationErrors -= "Images"
+                // Limit to 10 images
+                val limitedUris = uris.take(10)
+
+                if (uris.size > 10) {
+                    validationErrors = validationErrors + mapOf("Images" to "Maximum 10 images allowed. Only first 10 will be selected.")
+                }
+
+                isCompressing = true
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        android.util.Log.d("ImagePicker", "Starting compression of ${limitedUris.size} images")
+
+                        // Compress images one by one, skip corrupted ones
+                        val compressedUris = mutableListOf<Uri>()
+                        val failedIndices = mutableListOf<Int>()
+
+                        for ((index, uri) in limitedUris.withIndex()) {
+                            try {
+                                android.util.Log.d("ImagePicker", "Compressing image ${index + 1}/${limitedUris.size}")
+                                val compressed = compressImage(context, uri, maxSizeKB = 350)
+                                compressedUris.add(compressed)
+                                android.util.Log.d("ImagePicker", "✓ Image ${index + 1} compressed successfully")
+                            } catch (e: Exception) {
+                                android.util.Log.e("ImagePicker", "✗ Failed to compress image ${index + 1}: ${e.message}", e)
+                                failedIndices.add(index + 1)
+                                // Continue with next image instead of throwing
+                            }
+                        }
+
+                        val totalSizeKB = calculateTotalSizeKB(context, compressedUris)
+                        android.util.Log.d("ImagePicker", "Compression complete. ${compressedUris.size}/${limitedUris.size} successful. Total size: ${totalSizeKB}KB")
+
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            if (compressedUris.isEmpty()) {
+                                validationErrors = validationErrors + mapOf("Images" to "All images failed to compress. Please try different images.")
+                            } else if (totalSizeKB > 10240) { // 10MB limit
+                                validationErrors = validationErrors + mapOf("Images" to "Total image size exceeds 10MB (${totalSizeKB}KB). Please select fewer or smaller images.")
+                            } else {
+                                selectedImageUris = compressedUris
+
+                                // Show warning if some images failed
+                                if (failedIndices.isNotEmpty()) {
+                                    val failedMsg = if (failedIndices.size == 1) {
+                                        "Image ${failedIndices[0]} failed to compress and was skipped. ${compressedUris.size} images ready."
+                                    } else {
+                                        "${failedIndices.size} images failed to compress and were skipped. ${compressedUris.size} images ready."
+                                    }
+                                    validationErrors = validationErrors + mapOf("Images" to failedMsg)
+                                } else if (uris.size <= 10) {
+                                    validationErrors = validationErrors - "Images"
+                                }
+
+                                android.util.Log.d("ImagePicker", "Successfully compressed ${compressedUris.size} images")
+                            }
+                            isCompressing = false
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("ImagePicker", "Compression error", e)
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            val errorMsg = when {
+                                e.message?.contains("Permission denied") == true -> "Permission denied. Please grant storage permission."
+                                e.message?.contains("FileNotFoundException") == true -> "Could not access selected images. Please try again."
+                                else -> "Error compressing images: ${e.message ?: "Unknown error"}"
+                            }
+                            validationErrors = validationErrors + mapOf("Images" to (errorMsg ?: "Unknown error occurred"))
+                            isCompressing = false
+                        }
+                    }
+                }
             }
         }
     )
-
-
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -175,6 +250,7 @@ fun AddItemDialog(
                     ImagePickerSection(
                         selectedImageUris = selectedImageUris,
                         validationErrors = validationErrors,
+                        isCompressing = isCompressing,
                         onPickImages = { imagePickerLauncher.launch("image/*") },
                         onRemoveImage = { uri -> selectedImageUris -= uri }
                     )
@@ -190,11 +266,13 @@ fun AddItemDialog(
 
                 SaveButton(
                     label = "Create ${if (type == ItemType.ROOM) "Room" else "Area"}",
+                    enabled = !isCompressing,
                     onClick = {
                         val validation = validateRoomInputs(
                             inputs,
                             selectedAmenities.value,
-                            selectedImageUris
+                            selectedImageUris,
+                            amenities.map { it.description }
                         )
 
                         if (validation.isValid) {
@@ -214,6 +292,92 @@ fun AddItemDialog(
     }
 }
 
+// Updated ImagePickerSection with loading state
+@Composable
+fun ImagePickerSection(
+    selectedImageUris: List<Uri>,
+    validationErrors: Map<String, String>,
+    isCompressing: Boolean = false,
+    onPickImages: () -> Unit,
+    onRemoveImage: (Uri) -> Unit
+) {
+    Column {
+        OutlinedButton(
+            onClick = onPickImages,
+            enabled = !isCompressing,
+            modifier = Modifier.fillMaxWidth().height(60.dp),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            if (isCompressing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Compressing images...")
+            } else {
+                Text("Upload Images (${selectedImageUris.size} selected)")
+            }
+        }
+
+        LazyRow(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(selectedImageUris) { uri ->
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    Image(
+                        painter = rememberAsyncImagePainter(uri),
+                        contentDescription = "Selected Image",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    IconButton(
+                        onClick = { onRemoveImage(uri) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .background(Color.White.copy(alpha = 0.7f), CircleShape)
+                            .size(20.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove",
+                            tint = Color.Black,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        validationErrors["Images"]?.let {
+            Text(
+                text = it,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+// Updated SaveButton with enabled state
+@Composable
+fun SaveButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(label)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -288,69 +452,6 @@ fun RoomSelectors(inputs: MutableMap<String, String>, validationErrors: Map<Stri
     }
 }
 
-
-@Composable
-fun ImagePickerSection(
-    selectedImageUris: List<Uri>,
-    validationErrors: Map<String, String>,
-    onPickImages: () -> Unit,
-    onRemoveImage: (Uri) -> Unit
-) {
-    Column {
-        OutlinedButton(
-            onClick = onPickImages,
-            modifier = Modifier.fillMaxWidth().height(60.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Upload Images (${selectedImageUris.size} selected)")
-        }
-
-        LazyRow(
-            modifier = Modifier.padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(selectedImageUris) { uri ->
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                ) {
-                    Image(
-                        painter = rememberAsyncImagePainter(uri),
-                        contentDescription = "Selected Image",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    IconButton(
-                        onClick = { onRemoveImage(uri) },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .background(Color.White.copy(alpha = 0.7f), CircleShape)
-                            .size(20.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove",
-                            tint = Color.Black,
-                            modifier = Modifier.size(12.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        validationErrors["Images"]?.let {
-            Text(
-                text = it,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-    }
-}
-
-
 @Composable
 fun AmenitiesSection(
     amenities: List<String>,
@@ -384,16 +485,5 @@ fun AmenitiesSection(
     }
 }
 
-
-@Composable
-fun SaveButton(label: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Text(label)
-    }
-}
 
 
