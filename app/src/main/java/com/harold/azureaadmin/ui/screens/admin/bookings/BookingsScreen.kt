@@ -122,7 +122,8 @@ fun BookingsScreen(
         BookingDetailsDialog(
             bookingId = id,
             viewModel = viewModel,
-            onDismiss = { selectedBookingId = null }
+            onDismiss = { selectedBookingId = null
+                viewModel.fetchBookings()}
         )
     }
 }

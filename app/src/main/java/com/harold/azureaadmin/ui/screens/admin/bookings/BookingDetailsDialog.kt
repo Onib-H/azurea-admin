@@ -76,15 +76,15 @@ fun BookingDetailsDialog(
         viewModel.getBookingDetails(bookingId)
     }
 
-    // Handle status update completion
     LaunchedEffect(statusUpdateMessage) {
-        statusUpdateMessage?.let {
-            delay(300)
+        if (statusUpdateMessage != null) {
             isUpdatingStatus = false
             viewModel.clearStatusMessage()
-            onDismiss()
+            onDismiss()   // dismiss only AFTER update is done
         }
     }
+
+
 
     // Show loading overlay during updates
     BookingApprovalLoader(
