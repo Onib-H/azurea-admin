@@ -1,3 +1,6 @@
+// Redesigned ID Verification Screen with card-based layout matching your Booking Details UI
+// Buttons placed inside content, improved spacing, consistent colors, no bottom navbar look
+
 package com.harold.azureaadmin.ui.screens.admin.users
 
 import androidx.compose.foundation.BorderStroke
@@ -6,20 +9,20 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.harold.azureaadmin.ui.components.topbar.AppTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,262 +57,278 @@ fun IdVerificationDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = true
-        )
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding(),
-            color = MaterialTheme.colorScheme.surface
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
         ) {
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Header
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(2.dp),
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "ID Verification",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimary
-                                )
-                            )
-                            Text(
-                                text = idType ?: "N/A",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f)
-                                )
-                            )
-                        }
-                        IconButton(onClick = onDismiss) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = "Close",
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
+            Column(modifier = Modifier.fillMaxSize()) {
 
-                // Scrollable Content
+                AppTopBar(
+                    title = "ID Verification",
+                    onBack = onDismiss
+                )
+
                 Column(
                     modifier = Modifier
-                        .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(20.dp)
-                        .padding(bottom = 80.dp)
+                        .padding(horizontal = 20.dp)
                 ) {
-                    // Front ID - Full width stacked
-                    Text(
-                        text = "Front Side",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Medium
-                        ),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 10f),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shadowElevation = 1.dp
-                    ) {
-                        AsyncImage(
-                            model = frontIdUrl,
-                            contentDescription = "Front ID",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
+                    Spacer(Modifier.height(16.dp))
 
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    // Back ID - Full width stacked
-                    Text(
-                        text = "Back Side",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Medium
-                        ),
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 10f),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shadowElevation = 1.dp
-                    ) {
-                        AsyncImage(
-                            model = backIdUrl,
-                            contentDescription = "Back ID",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // Discount Checkbox - Minimal with subtle background
-                    Surface(
+                    // ID TYPE CARD - PROMINENT
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        ),
+                        elevation = CardDefaults.cardElevation(2.dp)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            // Label
+                            Text(
+                                text = "ID Type: ",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF333333)
+                            )
+
+                            Spacer(Modifier.width(12.dp))
+
+                            // Value Chip
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            ) {
+                                Text(
+                                    text = idType ?: "N/A",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // FRONT ID CARD
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Front Side",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+
+                            AsyncImage(
+                                model = frontIdUrl,
+                                contentDescription = "Front ID",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 10f)
+                                    .clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // BACK ID CARD
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Back Side",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                modifier = Modifier.padding(bottom = 12.dp)
+                            )
+
+                            AsyncImage(
+                                model = backIdUrl,
+                                contentDescription = "Back ID",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 10f)
+                                    .clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // DISCOUNT OPTION CARD
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(
                                 checked = applyDiscount,
-                                onCheckedChange = { applyDiscount = it },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.primary
+                                onCheckedChange = { applyDiscount = it }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Apply PWD / Senior Discount",
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Apply PWD / Senior Discount (20% off all bookings)",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
+                                Text(
+                                    text = "20% off total price",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
-                    // Rejection Section - Minimal design
                     if (showRejectDropdown) {
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(Modifier.height(20.dp))
 
-                        // Dropdown
-                        ExposedDropdownMenuBox(
-                            expanded = expanded,
-                            onExpandedChange = { expanded = !expanded }
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+
                         ) {
-                            OutlinedTextField(
-                                value = selectedReason,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Select Rejection Reason") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedContainerColor = Color.White,
-                                    focusedContainerColor = Color.White
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Rejection Reason",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    modifier = Modifier.padding(bottom = 12.dp)
                                 )
-                            )
-                            ExposedDropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false },
-                                modifier = Modifier.background(Color.White)
-                            ) {
-                                rejectionReasons.forEach { reason ->
-                                    DropdownMenuItem(
-                                        text = { Text(reason) },
-                                        onClick = {
-                                            selectedReason = reason
-                                            expanded = false
-                                        },
-                                        colors = MenuDefaults.itemColors(
-                                            textColor = MaterialTheme.colorScheme.onSurface
+
+                                ExposedDropdownMenuBox(
+                                    expanded = expanded,
+                                    onExpandedChange = { expanded = !expanded }
+                                ) {
+                                    OutlinedTextField(
+                                        value = selectedReason,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Select Rejection Reason") },
+                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                                        modifier = Modifier.fillMaxWidth().menuAnchor(),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    ExposedDropdownMenu(
+                                        expanded = expanded,
+                                        onDismissRequest = { expanded = false },
+                                        containerColor = Color.White // makes it white
+                                    ) {
+                                        rejectionReasons.forEach { reason ->
+                                            DropdownMenuItem(
+                                                text = { Text(reason) },
+                                                onClick = {
+                                                    selectedReason = reason
+                                                    expanded = false
+                                                },
+                                                colors = MenuDefaults.itemColors(
+                                                    textColor = MaterialTheme.colorScheme.onSurface
+                                                )
+
+
+                                            )
+                                        }
+                                    }
+                                }
+
+                                if (selectedReason == "Other") {
+                                    Spacer(Modifier.height(12.dp))
+                                    OutlinedTextField(
+                                        value = customReason,
+                                        onValueChange = { customReason = it },
+                                        label = { Text("Enter custom reason") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3,
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                }
+
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = {
+                                        val reason = if (selectedReason == "Other") customReason else selectedReason
+                                        if (reason.isNotEmpty()) {
+                                            onReject(reason)
+                                            onDismiss()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error
+                                    ),
+                                    shape = RoundedCornerShape(12.dp),
+                                    contentPadding = PaddingValues(vertical = 14.dp)
+                                ) {
+                                    Text(
+                                        "Submit Rejection",
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = FontWeight.SemiBold
                                         )
                                     )
                                 }
                             }
                         }
-
-                        // Custom reason
-                        if (selectedReason == "Other") {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedTextField(
-                                value = customReason,
-                                onValueChange = { customReason = it },
-                                label = { Text("Enter custom reason") },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 3,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    unfocusedContainerColor = Color.White,
-                                    focusedContainerColor = Color.White
-                                )
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // Submit Rejection - Minimal
-                        Button(
-                            onClick = {
-                                val reasonToSend = if (selectedReason == "Other")
-                                    customReason else selectedReason
-                                if (reasonToSend.isNotEmpty()) {
-                                    onReject(reasonToSend)
-                                    onDismiss()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                disabledContainerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.3f)
-                            ),
-                            enabled = selectedReason.isNotEmpty() &&
-                                    (selectedReason != "Other" || customReason.isNotEmpty()),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "Submit Rejection",
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
                     }
-                }
 
-                // Fixed Bottom Buttons
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 8.dp
-                ) {
+                    Spacer(Modifier.height(24.dp))
+
+                    // ACTION BUTTONS (INSIDE CONTENT)
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         OutlinedButton(
                             onClick = { showRejectDropdown = !showRejectDropdown },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp),
+                            border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = MaterialTheme.colorScheme.error
                             ),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "Reject",
-                                modifier = Modifier.padding(vertical = 4.dp)
+                                "Reject",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             )
                         }
 
@@ -318,18 +337,24 @@ fun IdVerificationDialog(
                                 onApprove(applyDiscount)
                                 onDismiss()
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF4CAF50)
+                                containerColor = MaterialTheme.colorScheme.primary
                             ),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Text(
-                                text = "Approve",
-                                modifier = Modifier.padding(vertical = 4.dp)
+                                "Approve",
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             )
                         }
                     }
+
+                    Spacer(Modifier.height(40.dp))
                 }
             }
         }

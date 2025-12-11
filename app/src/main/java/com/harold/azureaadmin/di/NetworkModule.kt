@@ -1,10 +1,14 @@
 package com.harold.azureaadmin.di
 
+import android.util.Log
 import com.harold.azureaadmin.data.local.DataStoreManager
 import com.harold.azureaadmin.data.remote.AdminApiService
 import com.harold.azureaadmin.utils.BASE_URL
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.harold.azureaadmin.dto.CookieDto
+import com.harold.azureaadmin.dto.cookieToDto
+import com.harold.azureaadmin.dto.dtoToCookie
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -47,65 +51,147 @@ object NetworkModule {
         gson: Gson
     ): CookieJar {
 
-        var memoryCookieCache: MutableMap<String, List<Cookie>> = mutableMapOf()
-        var isLoadedFromDisk = false
+        Log.d("COOKIE_JAR", "CookieJar CREATED")
 
-        // Preload cookies once in background
-        CoroutineScope(Dispatchers.IO).launch {
-            val savedJson = dataStore.getCookie.firstOrNull()
-            if (!savedJson.isNullOrEmpty()) {
-                val type = object : TypeToken<List<String>>() {}.type
-                val cookieStrings: List<String> = gson.fromJson(savedJson, type)
+        val cookies = mutableListOf<Cookie>()
+        val lock = Any()
 
-                val cookies = cookieStrings.mapNotNull { raw ->
-                    // use dummy url host because the actual host will load later
-                    Cookie.parse(HttpUrl.Builder().scheme("http").host("dummy").build(), raw)
-                }
+        // Load stored cookies synchronously
+        runBlocking {
+            try {
+                dataStore.initializeCache()
+            } catch (_: Exception) { }
 
-                memoryCookieCache["preload"] = cookies
+            val json = try {
+                dataStore.getCachedCookieJson()
+            } catch (ex: Exception) {
+                Log.d("COOKIE_JAR", "getCachedCookieJson failed: ${ex.message}")
+                null
             }
-            isLoadedFromDisk = true
+
+            if (!json.isNullOrBlank()) {
+                try {
+                    val type = object : TypeToken<List<CookieDto>>() {}.type
+                    val list: List<CookieDto> = gson.fromJson(json, type) ?: emptyList()
+
+                    synchronized(lock) {
+                        val converted = list.mapNotNull { dto ->
+                            try {
+                                dtoToCookie(dto)
+                            } catch (ex: Exception) {
+                                null
+                            }
+                        }
+
+                        // Add cookies properly BEFORE pruning
+                        cookies.addAll(converted)
+
+                        // 🔥 remove ONLY expired ones
+                        val before = cookies.size
+                        cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
+                        val after = cookies.size
+                        Log.d("COOKIE_JAR", "Startup prune: removed ${before - after}")
+                    }
+
+                } catch (ex: Exception) {
+                    Log.d("COOKIE_JAR", "Cookie parse error: ${ex.message}")
+                }
+            }
+        }
+
+
+        // Persist helper - synchronous handling inside a try/catch
+        suspend fun persist() {
+            val dtos = synchronized(lock) {
+                cookies.filter { it.expiresAt > System.currentTimeMillis() }
+                    .map { cookieToDto(it) }
+            }
+            try {
+                dataStore.saveCookie(gson.toJson(dtos))
+            } catch (ex: Exception) {
+                Log.d("COOKIE_JAR", "persist failed: ${ex.message}")
+            }
         }
 
         return object : CookieJar {
 
-            override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-                if (cookies.isEmpty()) return
+            override fun saveFromResponse(url: HttpUrl, received: List<Cookie>) {
+                try {
+                    Log.d("COOKIE_JAR", "Saving cookies from ${url.host}: $received")
 
-                val valid = cookies.filter { it.expiresAt > System.currentTimeMillis() }
+                    synchronized(lock) {
+                        for (c in received) {
+                            try {
+                                val isEmptyValue = c.value.isEmpty()
+                                val isExpiredNow = c.expiresAt <= System.currentTimeMillis()
 
-                memoryCookieCache[url.host] = valid
+                                if (isEmptyValue || isExpiredNow) {
+                                    cookies.removeAll { it.name == c.name && it.domain == c.domain && it.path == c.path }
+                                    Log.d("COOKIE_JAR", "Removing cookie ${c.name} for domain ${c.domain}")
+                                } else {
+                                    // replace existing then add
+                                    cookies.removeAll { it.name == c.name && it.domain == c.domain && it.path == c.path }
+                                    cookies.add(c)
+                                }
+                            } catch (inner: Exception) {
+                                // skip malformed cookie
+                                Log.d("COOKIE_JAR", "skipping malformed cookie: ${inner.message}")
+                            }
+                        }
 
-                val json = gson.toJson(valid.map { it.toString() })
+                        // prune expired
+                        cookies.removeAll { it.expiresAt <= System.currentTimeMillis() }
+                    }
 
-                CoroutineScope(Dispatchers.IO).launch {
-                    dataStore.saveCookie(json)
+                    // Persist on IO dispatcher but ensure exceptions are caught
+                    kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+                        try {
+                            Log.d("COOKIE_JAR", "Persisting cookies: $cookies")
+                            persist()
+                        } catch (ex: Exception) {
+                            Log.d("COOKIE_JAR", "persist coroutine failed: ${ex.message}")
+                        }
+                    }
+                } catch (ex: Exception) {
+                    Log.d("COOKIE_JAR", "saveFromResponse error: ${ex.message}")
                 }
             }
 
             override fun loadForRequest(url: HttpUrl): List<Cookie> {
 
-                // If Memory already has cookies for this host
-                memoryCookieCache[url.host]?.let { list ->
-                    return list.filter { it.expiresAt > System.currentTimeMillis() }
+                val path = url.encodedPath
+
+                // Log cookies that exist (for debugging visibility)
+                val currentCookies = synchronized(lock) { cookies.toList() }
+
+
+                // 🚫 Still skip sending cookies when calling login API
+                if (path.contains("/api/auth/login")) {
+                    Log.d("COOKIE_JAR", "Skipping cookies for login request")
+                    return emptyList()
                 }
 
-                // If not loaded from disk yet, return empty and soon the preload fills memory
-                if (!isLoadedFromDisk) return emptyList()
-
-                // If we preloaded cookies, rebind them to this host
-                memoryCookieCache["preload"]?.let { preloadCookies ->
-                    val updated = preloadCookies.mapNotNull { stored ->
-                        Cookie.parse(url, stored.toString())
+                // Normal behavior for all other requests
+                val valid = synchronized(lock) {
+                    cookies.toList().filter {
+                        it.expiresAt > System.currentTimeMillis() &&
+                                url.host.endsWith(it.domain.removePrefix(".")) &&
+                                url.encodedPath.startsWith(it.path)
                     }
-                    memoryCookieCache[url.host] = updated
-                    return updated
                 }
 
-                return emptyList()
+                // Log the cookies being applied to this request
+                Log.d("COOKIE_JAR", "Loading cookies for ${url.host}: $valid")
+
+                return valid
             }
+
+
         }
     }
+
+
+
 
 
 
@@ -118,9 +204,9 @@ object NetworkModule {
         OkHttpClient.Builder()
             .addInterceptor(logging)
             .cookieJar(cookieJar)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .writeTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .writeTimeout(25, TimeUnit.SECONDS)
             .build()
 
     @Provides
@@ -140,4 +226,6 @@ object NetworkModule {
         retrofit: Retrofit
     ): AdminApiService =
         retrofit.create(AdminApiService::class.java)
+
+
 }

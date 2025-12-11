@@ -27,34 +27,15 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 
 /**
- * Natural booking approval loader that syncs with actual backend response time
- * No artificial steps - just shows real loading progress
+ * Simple booking approval loader - just shows/hides based on isLoading
  */
 @Composable
 fun BookingApprovalLoader(
     isLoading: Boolean,
     actionType: BookingActionType = BookingActionType.RESERVE,
-    onComplete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showSuccess by remember { mutableStateOf(false) }
-    var hasStarted by remember { mutableStateOf(false) }
-
-    // Reset states when loading starts
-    LaunchedEffect(isLoading) {
-        if (isLoading && !hasStarted) {
-            hasStarted = true
-            showSuccess = false
-        } else if (!isLoading && hasStarted) {
-            // Backend responded - show success
-            showSuccess = true
-            delay(1200) // Brief success display
-            onComplete()
-            hasStarted = false
-        }
-    }
-
-    if (isLoading || showSuccess) {
+    if (isLoading) {
         Dialog(
             onDismissRequest = { /* Prevent dismissal during loading */ },
             properties = DialogProperties(
@@ -76,65 +57,28 @@ fun BookingApprovalLoader(
                         .padding(28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    if (!showSuccess) {
-                        // Loading State - Natural spinner
-                        NaturalCircularLoader(
-                            actionType = actionType,
-                            modifier = Modifier.size(120.dp)
-                        )
+                    // Rotating loader
+                    NaturalCircularLoader(
+                        actionType = actionType,
+                        modifier = Modifier.size(120.dp)
+                    )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                        Text(
-                            text = getLoadingText(actionType),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF1A1A1A)
-                        )
+                    Text(
+                        text = getLoadingText(actionType),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1A1A1A)
+                    )
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                        Text(
-                            text = "Please wait...",
-                            fontSize = 13.sp,
-                            color = Color(0xFF757575)
-                        )
-                    } else {
-                        // Success State
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp)
-                                .background(
-                                    color = Color(0xFFE8F5E9),
-                                    shape = RoundedCornerShape(60.dp)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = "Success",
-                                modifier = Modifier.size(64.dp),
-                                tint = Color(0xFF2E7D32)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = "Success!",
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF2E7D32)
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = getSuccessText(actionType),
-                            fontSize = 14.sp,
-                            color = Color(0xFF757575)
-                        )
-                    }
+                    Text(
+                        text = "Please wait...",
+                        fontSize = 13.sp,
+                        color = Color(0xFF757575)
+                    )
                 }
             }
         }
@@ -146,7 +90,6 @@ private fun NaturalCircularLoader(
     actionType: BookingActionType,
     modifier: Modifier = Modifier
 ) {
-    // Infinite rotation animation
     val infiniteTransition = rememberInfiniteTransition(label = "rotation")
     val rotation by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -165,7 +108,6 @@ private fun NaturalCircularLoader(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        // Rotating progress ring
         Canvas(modifier = Modifier.fillMaxSize()) {
             val strokeWidth = 10.dp.toPx()
             val diameter = size.minDimension - strokeWidth
@@ -203,8 +145,6 @@ private fun NaturalCircularLoader(
     }
 }
 
-
-
 private fun getLoadingText(actionType: BookingActionType): String {
     return when (actionType) {
         BookingActionType.RESERVE -> "Reserving Booking"
@@ -213,17 +153,6 @@ private fun getLoadingText(actionType: BookingActionType): String {
         BookingActionType.REJECT -> "Rejecting Booking"
         BookingActionType.CANCEL -> "Cancelling Booking"
         BookingActionType.MARK_NO_SHOW -> "Marking No Show"
-    }
-}
-
-private fun getSuccessText(actionType: BookingActionType): String {
-    return when (actionType) {
-        BookingActionType.RESERVE -> "Booking reserved successfully"
-        BookingActionType.CHECK_IN -> "Guest checked in successfully"
-        BookingActionType.CHECK_OUT -> "Guest checked out successfully"
-        BookingActionType.REJECT -> "Booking rejected"
-        BookingActionType.CANCEL -> "Booking cancelled"
-        BookingActionType.MARK_NO_SHOW -> "Marked as no show"
     }
 }
 

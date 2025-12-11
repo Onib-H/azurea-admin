@@ -37,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.harold.azureaadmin.R
 import com.harold.azureaadmin.data.local.DataStoreManager
@@ -50,34 +51,17 @@ import com.harold.azureaadmin.ui.screens.admin.dashboard.DashboardScreen
 import com.harold.azureaadmin.ui.screens.admin.rooms.RoomsScreen
 import com.harold.azureaadmin.ui.screens.admin.users.UsersScreen
 import com.harold.azureaadmin.ui.theme.Playfair
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminScreen(
     navController: NavController,
-    repository: AdminRepository,
-    dataStoreManager: DataStoreManager
+    viewModel: AdminViewModel = hiltViewModel()
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-
-    var loggedIn by remember { mutableStateOf<Boolean?>(null) }
-
-    // 🔑 Check token OR cookie
-    LaunchedEffect(Unit) {
-        val cookie = dataStoreManager.getCookie.firstOrNull()
-        val token = dataStoreManager.getToken.firstOrNull()
-        loggedIn = !token.isNullOrEmpty() || !cookie.isNullOrEmpty()
-        if (loggedIn == false) {
-            navController.navigate("splash") {
-                popUpTo(0) { inclusive = true }
-            }
-        }
-    }
-
-    var selectedItem by remember { mutableStateOf("Dashboard") }
+    var selectedItem by remember { mutableStateOf("Admin Dashboard") }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -90,9 +74,7 @@ fun AdminScreen(
                     scope.launch { drawerState.close() }
                 },
                 onClose = { scope.launch { drawerState.close() } },
-                navController = navController,
-                dataStoreManager = dataStoreManager,
-                repository = repository // Pass repository here
+                navController = navController
             )
         }
     ) {
@@ -127,9 +109,7 @@ fun AdminScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { /* more actions */ }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More", tint = Color.White)
-                        }
+                        IconButton(onClick = { /* more actions */ }) {}
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color(0xFF6A1B9A)
@@ -144,7 +124,7 @@ fun AdminScreen(
                     .background(Color.White)
             ) {
                 when (selectedItem) {
-                    "Dashboard" -> DashboardScreen()
+                    "Admin Dashboard" -> DashboardScreen()
                     "Manage Bookings" -> BookingsScreen()
                     "Manage Areas" -> AreasScreen()
                     "Manage Rooms" -> RoomsScreen()

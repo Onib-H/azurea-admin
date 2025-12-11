@@ -9,9 +9,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.harold.azureaadmin.data.models.BookingData
+import com.harold.azureaadmin.data.models.BookingDetails
 import com.harold.azureaadmin.ui.components.common.ListScreenContainer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 
 @Composable
 fun BookingsScreen(
@@ -31,6 +34,7 @@ fun BookingsScreen(
 
     LaunchedEffect(Unit) { viewModel.fetchBookings() }
 
+// FILTERING FIRST
     val filtered = if (searchQuery.isBlank()) {
         bookings
     } else {
@@ -46,7 +50,7 @@ fun BookingsScreen(
                 user.email,
                 user.first_name,
                 user.last_name,
-                "$${user.first_name} ${user.last_name}",
+                "${user.first_name} ${user.last_name}",
                 roomName,
                 areaName
             ).any { field ->
@@ -54,6 +58,8 @@ fun BookingsScreen(
             }
         }
     }
+
+
 
 
     val onRefresh = {
@@ -83,7 +89,7 @@ fun BookingsScreen(
             searchQuery = searchQuery,
             onSearchChange = { searchQuery = it },
             showFilter = false,
-            onFilterClick = {  },
+            onFilterClick = { },
 
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
@@ -120,3 +126,4 @@ fun BookingsScreen(
         )
     }
 }
+

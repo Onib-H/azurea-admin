@@ -48,14 +48,12 @@ class LoginViewModel @Inject constructor(
                     return@launch
                 }
 
-                val body = response.body()
-                if (body == null) {
+                val body = response.body() ?: run {
                     _loginState.value = LoginState.Error("Unexpected empty response")
                     return@launch
                 }
 
-                val user = body.user
-                if (user == null) {
+                val user = body.user ?: run {
                     _loginState.value = LoginState.Error("Not authenticated")
                     return@launch
                 }
@@ -65,18 +63,14 @@ class LoginViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Save token on IO thread
-                body.access_token?.let { token ->
-                    viewModelScope.launch(Dispatchers.IO) {
-                        dataStore.saveToken(token)
-                    }
-                }
+                // REMOVE saving JWT — cookies already contain tokens
+                // no DataStore.saveToken(...) here
 
                 _loginState.value = LoginState.Success(body)
 
             } catch (e: Exception) {
                 val msg = when (e) {
-                    is java.net.SocketTimeoutException -> "Connection timed out. Please try again."
+                    is java.net.SocketTimeoutException -> "Connection timed out."
                     is java.net.UnknownHostException -> "No internet connection."
                     is java.net.ConnectException -> "Unable to reach server."
                     else -> "Something went wrong: ${e.message}"
@@ -84,8 +78,8 @@ class LoginViewModel @Inject constructor(
 
                 _loginState.value = LoginState.Error(msg)
             }
-
         }
     }
+
 }
 

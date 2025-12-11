@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
@@ -34,13 +36,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
@@ -60,6 +66,14 @@ import com.harold.azureaadmin.R
 
         val viewModel: LoginViewModel = hiltViewModel()
         val loginState by viewModel.loginState.collectAsState()
+
+        // Needed for "Next" focusing password
+        val passwordFocus = remember { FocusRequester() }
+        val focusManager = LocalFocusManager.current
+
+        fun submit() {
+            viewModel.login(email, password)
+        }
 
         Box(
             modifier = Modifier
@@ -97,21 +111,28 @@ import com.harold.azureaadmin.R
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // EMAIL FIELD
                 OutlinedTextField(
                     value = email,
                     onValueChange = { email = it.trim() },
                     label = { Text("Email", color = Color.Gray) },
                     placeholder = { Text("email@gmail.com", color = Color.Gray) },
+                    singleLine = true,
+                    maxLines = 1,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Filled.Email,
-                            contentDescription = "Email Icon",
+                            contentDescription = null,
                             tint = Color.DarkGray
                         )
                     },
-                    textStyle = TextStyle(color = Color.Black)
+                    textStyle = TextStyle(color = Color.Black),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(
+                        onNext = { passwordFocus.requestFocus() } // << WORKS NOW
+                    )
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -119,31 +140,41 @@ import com.harold.azureaadmin.R
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
+                    singleLine = true,
+                    maxLines = 1,
                     visualTransformation =
                         if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     label = { Text("Password", color = Color.Gray) },
                     placeholder = { Text("Enter your password", color = Color.Gray) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(passwordFocus),
                     shape = RoundedCornerShape(12.dp),
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Filled.Lock,
-                            contentDescription = "Password Icon",
+                            contentDescription = null,
                             tint = Color.DarkGray
                         )
                     },
                     trailingIcon = {
                         IconButton(onClick = { passwordVisible = !passwordVisible }) {
                             Icon(
-                                imageVector =
-                                    if (passwordVisible) Icons.Filled.Visibility
-                                    else Icons.Filled.VisibilityOff,
-                                contentDescription = "Toggle password",
+                                imageVector = if (passwordVisible) Icons.Filled.Visibility
+                                else Icons.Filled.VisibilityOff,
+                                contentDescription = null,
                                 tint = Color.Black
                             )
                         }
                     },
-                    textStyle = TextStyle(color = Color.Black)
+                    textStyle = TextStyle(color = Color.Black),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()  // closes keyboard
+                            submit()
+                        }
+                    )
                 )
 
                 if (loginState is LoginState.Error) {
@@ -159,13 +190,14 @@ import com.harold.azureaadmin.R
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // LOGIN BUTTON
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp)
                         .background(Color(0xFF6A1B9A), RoundedCornerShape(12.dp))
                         .clickable(enabled = loginState !is LoginState.Loading) {
-                            viewModel.login(email, password)
+                            submit()
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -193,5 +225,6 @@ import com.harold.azureaadmin.R
             }
         }
     }
+
 
 

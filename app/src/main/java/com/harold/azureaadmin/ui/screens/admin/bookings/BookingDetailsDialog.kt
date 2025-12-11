@@ -69,12 +69,14 @@ fun BookingDetailsDialog(
     var isUpdatingStatus by remember { mutableStateOf(false) }
     var currentActionType by remember { mutableStateOf(BookingActionType.RESERVE) }
 
+    // Load booking details only once
     LaunchedEffect(bookingId) {
         viewModel.clearStatusMessage()
         viewModel.clearError()
         viewModel.getBookingDetails(bookingId)
     }
 
+    // Handle status update completion
     LaunchedEffect(statusUpdateMessage) {
         statusUpdateMessage?.let {
             delay(300)
@@ -84,62 +86,82 @@ fun BookingDetailsDialog(
         }
     }
 
+    // Show loading overlay during updates
     BookingApprovalLoader(
         isLoading = isUpdatingStatus,
         actionType = currentActionType,
-        onComplete = {}
     )
 
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = { if (!isUpdatingStatus) onDismiss() },
+        properties = DialogProperties(
+            dismissOnBackPress = !isUpdatingStatus,
+            dismissOnClickOutside = !isUpdatingStatus,
+            usePlatformDefaultWidth = false
+        )
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = Color(0xFFF5F5F5)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-
                 AppTopBar(
                     title = "Booking Details",
-                    onBack = { onDismiss }
+                    onBack = { if (!isUpdatingStatus) onDismiss() }
                 )
 
                 when {
-                    loading -> LoadingState()
-                    error != null -> ErrorState(
+                    loading && bookingDetails == null -> LoadingState()
+
+                    error != null && bookingDetails == null -> ErrorState(
                         error = error,
                         onRetry = { viewModel.getBookingDetails(bookingId) }
                     )
+
                     bookingDetails != null -> {
                         BookingDetailsContent(
                             booking = bookingDetails!!,
+                            isProcessing = isUpdatingStatus,
                             onReserve = { amount ->
                                 currentActionType = BookingActionType.RESERVE
                                 isUpdatingStatus = true
-                                viewModel.updateBookingStatus(
+                                // Record payment transaction, then update status with down_payment
+                                viewModel.recordPaymentAndReserve(
                                     bookingId = bookingDetails!!.id,
-                                    newStatus = "reserved",
-                                    downPayment = amount
+                                    amount = amount,
                                 )
                             },
-                            onReject = { showRejectDialog = true },
-                            onCancel = { showCancelDialog = true },
+                            onReject = {
+                                if (!isUpdatingStatus) showRejectDialog = true
+                            },
+                            onCancel = {
+                                if (!isUpdatingStatus) showCancelDialog = true
+                            },
                             onCheckIn = { amount ->
                                 currentActionType = BookingActionType.CHECK_IN
                                 isUpdatingStatus = true
-                                val totalPayment = (bookingDetails!!.down_payment ?: 0.0) + amount
+
+                                val downPayment = bookingDetails!!.down_payment ?: 0.0
+                                val totalPaid = bookingDetails!!.total_amount
+                                val alreadyRecorded = if (totalPaid == 0.0) downPayment else totalPaid
+
+                                // Only record if there's a remaining balance
                                 if (amount > 0) {
-                                    viewModel.recordPaymentAndCheckIn(bookingDetails!!.id, totalPayment)
+                                    viewModel.recordPaymentAndCheckIn(bookingDetails!!.id, amount)
                                 } else {
+                                    // No remaining balance, just check in
                                     viewModel.updateBookingStatus(bookingDetails!!.id, "checked_in")
                                 }
                             },
                             onCheckOut = {
-                                showConfirmDialog = BookingAction.CheckOut(bookingDetails!!.id)
+                                if (!isUpdatingStatus) {
+                                    showConfirmDialog = BookingAction.CheckOut(bookingDetails!!.id)
+                                }
                             },
                             onMarkNoShow = {
-                                showConfirmDialog = BookingAction.MarkNoShow(bookingDetails!!.id)
+                                if (!isUpdatingStatus) {
+                                    showConfirmDialog = BookingAction.MarkNoShow(bookingDetails!!.id)
+                                }
                             }
                         )
                     }
@@ -148,7 +170,7 @@ fun BookingDetailsDialog(
         }
     }
 
-    // Dialogs (unchanged)
+    // Reject Dialog
     if (showRejectDialog) {
         RejectBookingDialog(
             onDismiss = { showRejectDialog = false },
@@ -166,6 +188,7 @@ fun BookingDetailsDialog(
         )
     }
 
+    // Cancel Dialog
     if (showCancelDialog) {
         CancelBookingDialog(
             onDismiss = { showCancelDialog = false },
@@ -183,6 +206,7 @@ fun BookingDetailsDialog(
         )
     }
 
+    // Confirm Action Dialog (Check Out / No Show)
     showConfirmDialog?.let { action ->
         ConfirmActionDialog(
             action = action,
@@ -255,6 +279,7 @@ private fun ErrorState(error: String?, onRetry: () -> Unit) {
 @Composable
 private fun BookingDetailsContent(
     booking: BookingDetails,
+    isProcessing: Boolean,
     onReserve: (Double) -> Unit,
     onReject: () -> Unit,
     onCancel: () -> Unit,
@@ -271,7 +296,7 @@ private fun BookingDetailsContent(
     ) {
         Spacer(Modifier.height(16.dp))
 
-        // Guest Info Card - Clean design
+        // Guest Info Card
         GuestInfoCard(booking)
 
         Spacer(Modifier.height(16.dp))
@@ -281,7 +306,6 @@ private fun BookingDetailsContent(
         Spacer(Modifier.height(16.dp))
 
         BookingInformationCard(booking)
-
 
         Spacer(Modifier.height(16.dp))
 
@@ -296,21 +320,24 @@ private fun BookingDetailsContent(
 
         Spacer(Modifier.height(16.dp))
 
-        // Status-specific content
+        // Status-specific content with processing state
         when (booking.status.uppercase()) {
             "PENDING" -> PendingBookingSection(
                 booking = booking,
+                isProcessing = isProcessing,
                 onReserve = onReserve,
                 onReject = onReject
             )
             "RESERVED" -> ReservedBookingSection(
                 booking = booking,
+                isProcessing = isProcessing,
                 onCheckIn = onCheckIn,
                 onCancel = onCancel,
                 onMarkNoShow = onMarkNoShow
             )
             "CHECKED_IN" -> CheckedInBookingSection(
                 booking = booking,
+                isProcessing = isProcessing,
                 onCheckOut = onCheckOut
             )
             "CHECKED_OUT" -> CheckedOutBookingSection(booking)
@@ -437,9 +464,7 @@ private fun PropertyInformationCard(booking: BookingDetails) {
 
     val maxGuests = room?.max_guests ?: area?.capacity ?: 0
 
-    val originalPrice = booking.original_price?.let {
-        "₱" + "%,.0f".format(it)
-    } ?: room?.price_per_night?.let {
+    val originalPrice = booking.total_price?.let {
         "₱" + "%,.0f".format(it)
     } ?: "N/A"
 
@@ -490,23 +515,28 @@ private fun PropertyInformationCard(booking: BookingDetails) {
 
             Column {
                 Text(
-                    text = "Status: $propertyName",
+                    text = propertyName,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color(0xFF333333)
                 )
 
                 Spacer(Modifier.height(6.dp))
-                PropertyChip(propertyType)
+
+                Row {
+                    Text(
+                        text = "Property Type: ",
+                        fontSize = 12.5.sp,
+                        color = Color(0xFF777777)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    PropertyChip(propertyType)
+                }
             }
 
             Spacer(Modifier.height(12.dp))
             HorizontalDivider(Modifier, DividerDefaults.Thickness, color = Color(0xFFF0F0F0))
             Spacer(Modifier.height(12.dp))
-
-
-
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
 
                 if (isRoom) {
                     Row(
@@ -556,13 +586,12 @@ private fun PropertyInformationCard(booking: BookingDetails) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Original Price", fontSize = 12.sp, color = Color(0xFF777777))
                         Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = originalPrice,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF333333)
-                        )
-                    }
+                    Text(
+                        text = originalPrice,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF333333)
+                    )
                 }
             }
         }
@@ -682,7 +711,7 @@ private fun BookingInformationCard(booking: BookingDetails) {
                     Text("Payment Method", fontSize = 12.sp, color = Color(0xFF666666))
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        booking.payment_method ?: "N/A",
+                        booking.payment_method?.replaceFirstChar { it.uppercase() } ?: "—",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -742,9 +771,7 @@ private fun SpecialRequestCard(specialRequest: String) {
 
 @Composable
 private fun PaymentSummaryCard(booking: BookingDetails) {
-    val totalAmount = booking.room_details?.discounted_price?.toDoubleOrNull()
-        ?: booking.area_details?.discounted_price?.toDoubleOrNull()
-        ?: booking.total_price
+    val totalAmount = booking.total_price
     val alreadyPaid = if (booking.total_amount == 0.0) booking.down_payment ?: 0.0 else booking.total_amount
     val remaining = totalAmount - alreadyPaid
 
@@ -858,6 +885,7 @@ private fun PaymentSummaryItem(
 @Composable
 private fun PendingBookingSection(
     booking: BookingDetails,
+    isProcessing: Boolean,
     onReserve: (Double) -> Unit,
     onReject: () -> Unit
 ) {
@@ -874,80 +902,130 @@ private fun PendingBookingSection(
     // Down Payment Input
     DownPaymentSection(
         totalPrice = booking.total_price,
-        onAmountChange = { enteredAmount = it }
+        onAmountChange = { enteredAmount = it },
+        enabled = !isProcessing
     )
 
     Spacer(Modifier.height(16.dp))
 
+    // Show Pay At Hotel notice ONLY if payment method is on-site
+    if (booking.payment_method == "On-Site") {
+        PayAtHotelNotice()
+        Spacer(Modifier.height(16.dp))
+    }
+
+
+    Spacer(Modifier.height(16.dp))
     // Action Buttons
     ActionButtonsDouble(
-        onReserve = { if (canReserve) onReserve(enteredAmount) },
-        onReject = onReject,
-        reserveEnabled = canReserve
+        onReserve = {
+            if (canReserve && !isProcessing) onReserve(enteredAmount)
+        },
+        onReject = {
+            if (!isProcessing) onReject()
+        },
+        reserveEnabled = canReserve && !isProcessing,
+        rejectEnabled = !isProcessing
     )
 }
 
 @Composable
 private fun ReservedBookingSection(
     booking: BookingDetails,
+    isProcessing: Boolean,
     onCheckIn: (Double) -> Unit,
     onCancel: () -> Unit,
     onMarkNoShow: () -> Unit
 ) {
     var enteredAmount by remember { mutableStateOf(0.0) }
 
+    // Determine property type
+    val propertyType = when {
+        booking.room_details != null -> "room"
+        booking.area_details != null -> "area"
+        else -> "unknown"
+    }
+
+    // Total price
     val totalAmount = booking.room_details?.discounted_price?.toDoubleOrNull()
         ?: booking.area_details?.discounted_price?.toDoubleOrNull()
         ?: booking.total_price
+
     val downPayment = booking.down_payment ?: 0.0
     val remainingBalance = totalAmount - downPayment
 
+    // Dates and times
     val today = LocalDate.now()
     val currentTime = remember { LocalTime.now() }
     val checkInDate = LocalDate.parse(booking.check_in_date)
-    val checkInTime = LocalTime.of(14, 0) // 2:00 PM
 
+    // Check-in start time: 2 PM for rooms, 8 AM for areas
+    val checkInStartTime = if (propertyType == "area") {
+        LocalTime.of(8, 0)
+    } else {
+        LocalTime.of(14, 0)
+    }
+
+    // Validation flags
     val canMarkNoShow = today.isAfter(checkInDate)
     val isCheckInDay = today.isEqual(checkInDate)
-    val isAfter2PM = currentTime.isAfter(checkInTime) || currentTime.equals(checkInTime)
-    val isPaymentComplete = enteredAmount == remainingBalance || remainingBalance == 0.0
-    val canCheckIn = isCheckInDay && isAfter2PM && isPaymentComplete
+    val isAfterCheckInStart = currentTime.isAfter(checkInStartTime) || currentTime.equals(checkInStartTime)
+    val isBeforeCheckIn = today.isBefore(checkInDate)
 
-    // Payment Proof (if any)
+    val isPaymentComplete =
+        enteredAmount == remainingBalance || remainingBalance == 0.0
+
+    val canCheckIn =
+        isCheckInDay && isAfterCheckInStart && isPaymentComplete && !isProcessing
+
+    // Payment Proof
     if (!booking.payment_proof.isNullOrEmpty()) {
         PaymentProofSection(booking.payment_proof)
         Spacer(Modifier.height(16.dp))
     }
 
-    // Payment Details Input
-    PaymentDetailsSection(booking) { enteredAmount = it }
+    // Payment input
+    PaymentDetailsSection(
+        booking = booking,
+        enabled = !isProcessing
+    ) { enteredAmount = it }
 
     Spacer(Modifier.height(16.dp))
 
-    // Check-in Notice
+    // Check-in Notice (UPDATED)
     CheckInTimeNotice(
+        propertyType = propertyType,
         canCheckIn = canCheckIn,
         isCheckInDay = isCheckInDay,
-        isBeforeCheckIn = today.isBefore(checkInDate),
-        isAfter2PM = isAfter2PM,
+        isBeforeCheckIn = isBeforeCheckIn,
+        isAfterCheckInStart = isAfterCheckInStart,
         isPaymentComplete = isPaymentComplete
     )
 
     Spacer(Modifier.height(16.dp))
 
-    // Action Buttons
+    // Buttons
     ActionButtonsTriple(
-        onMarkNoShow = onMarkNoShow,
-        onCancel = onCancel,
-        onCheckIn = { if (canCheckIn) onCheckIn(enteredAmount) },
-        checkInEnabled = canCheckIn,
-        markNoShowEnabled = canMarkNoShow
+        onMarkNoShow = {
+            if (!isProcessing) onMarkNoShow()
+        },
+        onCancel = {
+            if (!isProcessing) onCancel()
+        },
+        onCheckIn = {
+            if (canCheckIn && !isProcessing) onCheckIn(enteredAmount)
+        },
+        checkInEnabled = canCheckIn && !isProcessing,
+        markNoShowEnabled = canMarkNoShow && !isProcessing,
+        cancelEnabled = !isProcessing
     )
 }
+
 
 @Composable
 private fun CheckedInBookingSection(
     booking: BookingDetails,
+    isProcessing: Boolean,
     onCheckOut: () -> Unit
 ) {
     var enteredAmount by remember { mutableStateOf(0.0) }
@@ -959,7 +1037,10 @@ private fun CheckedInBookingSection(
     }
 
     // Payment Details (if any remaining)
-    PaymentDetailsSection(booking) { enteredAmount = it }
+    PaymentDetailsSection(
+        booking = booking,
+        enabled = !isProcessing
+    ) { enteredAmount = it }
 
     if (enteredAmount > 0) {
         Spacer(Modifier.height(16.dp))
@@ -967,13 +1048,18 @@ private fun CheckedInBookingSection(
 
     Spacer(Modifier.height(16.dp))
 
-    // Check-in Notice
+    // Check-out Notice
     CheckOutTimeNotice()
+
+    Spacer(Modifier.height(16.dp))
 
     // Action Button
     ActionButtonsSingle(
         label = "Check Out Guest",
-        onClick = onCheckOut,
+        onClick = {
+            if (!isProcessing) onCheckOut()
+        },
+        enabled = !isProcessing
     )
 }
 
@@ -988,72 +1074,19 @@ private fun CheckedOutBookingSection(booking: BookingDetails) {
     }
 
     // Payment Details (read-only view)
-    PaymentDetailsSection(booking) { enteredAmount = it }
+    PaymentDetailsSection(
+        booking = booking,
+        enabled = false
+    ) { enteredAmount = it }
 }
 
 
-
-
-
-
-
 @Composable
-fun DownPaymentSection(totalPrice: Double, onAmountChange: (Double) -> Unit) {
-    var enteredAmount by remember { mutableStateOf("") }
-    val requiredDownPayment = totalPrice / 2
-    val amount = enteredAmount.toDoubleOrNull() ?: 0.0
-    val isTooMuch = amount > totalPrice
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp)
-    ) {
-        Text(
-            text = "Enter Down Payment",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF1A1A1A)
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            text = "Minimum required: ₱${"%,.2f".format(requiredDownPayment)}",
-            fontSize = 12.sp,
-            color = Color(0xFF757575)
-        )
-
-        Spacer(Modifier.height(12.dp))
-
-        AmountInputField(
-            value = enteredAmount,
-            onValueChange = {
-                if (it.matches(Regex("^\\d*\\.?\\d*$"))) {
-                    enteredAmount = it
-                    onAmountChange(it.toDoubleOrNull() ?: 0.0)
-                }
-            },
-            onClear = {
-                enteredAmount = ""
-                onAmountChange(0.0)
-            }
-        )
-
-        Spacer(Modifier.height(10.dp))
-
-        PaymentValidationMessage(
-            enteredAmount = enteredAmount,
-            amount = amount,
-            isTooMuch = isTooMuch,
-            requiredDownPayment = requiredDownPayment,
-            totalPrice = totalPrice
-        )
-    }
-}
-
-@Composable
-fun PaymentDetailsSection(booking: BookingDetails, onAmountChange: (Double) -> Unit) {
+fun PaymentDetailsSection(
+    booking: BookingDetails,
+    enabled: Boolean = true,
+    onAmountChange: (Double) -> Unit
+) {
     val totalAmount = booking.room_details?.discounted_price?.toDoubleOrNull()
         ?: booking.area_details?.discounted_price?.toDoubleOrNull()
         ?: booking.total_price
@@ -1083,6 +1116,7 @@ fun PaymentDetailsSection(booking: BookingDetails, onAmountChange: (Double) -> U
 
             AmountInputField(
                 value = enteredAmount,
+                enabled = enabled,
                 onValueChange = {
                     if (it.matches(Regex("^\\d*\\.?\\d*$"))) {
                         enteredAmount = it
@@ -1118,25 +1152,206 @@ fun PaymentDetailsSection(booking: BookingDetails, onAmountChange: (Double) -> U
 }
 
 
+@Composable
+fun ActionButtonsSingle(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+            .height(48.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            disabledContainerColor = Color(0xFFBDBDBD)
+        )
+    ) {
+        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
 
+
+@Composable
+fun DownPaymentSection(
+    totalPrice: Double,
+    enabled: Boolean = true,
+    onAmountChange: (Double) -> Unit
+) {
+    var enteredAmount by remember { mutableStateOf("") }
+    val requiredDownPayment = totalPrice / 2
+    val amount = enteredAmount.toDoubleOrNull() ?: 0.0
+    val isTooMuch = amount > totalPrice
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp)
+    ) {
+        Text(
+            text = "Enter Down Payment",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF1A1A1A)
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = "Minimum required: ₱${"%,.2f".format(requiredDownPayment)}",
+            fontSize = 12.sp,
+            color = Color(0xFF757575)
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        AmountInputField(
+            value = enteredAmount,
+            enabled = enabled,
+            onValueChange = {
+                if (it.matches(Regex("^\\d*\\.?\\d*$"))) {
+                    enteredAmount = it
+                    onAmountChange(it.toDoubleOrNull() ?: 0.0)
+                }
+            },
+            onClear = {
+                enteredAmount = ""
+                onAmountChange(0.0)
+            }
+        )
+
+        Spacer(Modifier.height(10.dp))
+
+        PaymentValidationMessage(
+            enteredAmount = enteredAmount,
+            amount = amount,
+            isTooMuch = isTooMuch,
+            requiredDownPayment = requiredDownPayment,
+            totalPrice = totalPrice
+        )
+    }
+}
+
+
+@Composable
+fun ActionButtonsDouble(
+    onReserve: () -> Unit,
+    onReject: () -> Unit,
+    reserveEnabled: Boolean = true,
+    rejectEnabled: Boolean = true
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = onReserve,
+            enabled = reserveEnabled,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                disabledContainerColor = Color(0xFFBDBDBD)
+            )
+        ) {
+            Text("Reserve Booking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        OutlinedButton(
+            onClick = onReject,
+            enabled = rejectEnabled,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFFD32F2F),
+                disabledContentColor = Color(0xFFBDBDBD)
+            ),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (rejectEnabled) Color(0xFFD32F2F) else Color(0xFFBDBDBD)
+            )
+        ) {
+            Text("Reject Booking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+fun ActionButtonsTriple(
+    onMarkNoShow: () -> Unit,
+    onCancel: () -> Unit,
+    onCheckIn: () -> Unit,
+    checkInEnabled: Boolean = true,
+    markNoShowEnabled: Boolean = true,
+    cancelEnabled: Boolean = true
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Button(
+            onClick = onCheckIn,
+            enabled = checkInEnabled,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF2E7D32),
+                disabledContainerColor = Color(0xFFBDBDBD)
+            )
+        ) {
+            Text("Check In Guest", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        OutlinedButton(
+            onClick = onCancel,
+            enabled = cancelEnabled,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFFED6C02),
+                disabledContentColor = Color(0xFFBDBDBD)
+            ),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (cancelEnabled) Color(0xFFED6C02) else Color(0xFFBDBDBD)
+            )
+        ) {
+            Text("Cancel Booking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+        OutlinedButton(
+            onClick = onMarkNoShow,
+            enabled = markNoShowEnabled,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = Color(0xFF757575),
+                disabledContentColor = Color(0xFFBDBDBD)
+            ),
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (markNoShowEnabled) Color(0xFF757575) else Color(0xFFBDBDBD)
+            )
+        ) {
+            Text("Mark as No Show", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
 
 
 @Composable
 private fun AmountInputField(
     value: String,
+    enabled: Boolean = true,
     onValueChange: (String) -> Unit,
     onClear: () -> Unit
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
+        enabled = enabled,
         placeholder = { Text("Enter payment amount", fontSize = 13.sp, color = Color.Gray) },
         leadingIcon = {
             Text("₱", style = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold))
         },
         trailingIcon = {
             if (value.isNotEmpty()) {
-                IconButton(onClick = onClear) {
+                IconButton(onClick = onClear, enabled = enabled) {
                     Icon(Icons.Default.Close, "Clear", modifier = Modifier.size(20.dp))
                 }
             }
@@ -1147,7 +1362,11 @@ private fun AmountInputField(
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = Color(0xFFE0E0E0)
+            unfocusedBorderColor = Color.DarkGray,
+            disabledBorderColor = Color(0xFFBDBDBD),
+            disabledTextColor = Color(0xFF9E9E9E),
+            disabledPlaceholderColor = Color(0xFFBDBDBD),
+            disabledLeadingIconColor = Color(0xFF9E9E9E)
         )
     )
 }
@@ -1259,102 +1478,6 @@ private fun InfoMessage(message: String, color: Color) {
         Text(message, color = color, fontSize = 11.sp)
     }
 }
-
-
-
-@Composable
-fun ActionButtonsDouble(
-    onReserve: () -> Unit,
-    onReject: () -> Unit,
-    reserveEnabled: Boolean = true
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Button(
-            onClick = onReserve,
-            enabled = reserveEnabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                disabledContainerColor = Color(0xFFBDBDBD)
-            )
-        ) {
-            Text("Reserve Booking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        }
-        OutlinedButton(
-            onClick = onReject,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD32F2F)),
-            border = BorderStroke(1.dp, Color(0xFFD32F2F))
-        ) {
-            Text("Reject Booking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-fun ActionButtonsTriple(
-    onMarkNoShow: () -> Unit,
-    onCancel: () -> Unit,
-    onCheckIn: () -> Unit,
-    checkInEnabled: Boolean = true,
-    markNoShowEnabled: Boolean = true
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Button(
-            onClick = onCheckIn,
-            enabled = checkInEnabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF2E7D32),
-                disabledContainerColor = Color(0xFFBDBDBD)
-            )
-        ) {
-            Text("Check In Guest", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        }
-        OutlinedButton(
-            onClick = onCancel,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFED6C02)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFED6C02))
-        ) {
-            Text("Cancel Booking", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        }
-        OutlinedButton(
-            onClick = onMarkNoShow,
-            enabled = markNoShowEnabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = Color(0xFF757575),
-                disabledContentColor = Color(0xFFBDBDBD)
-            ),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF757575))
-        ) {
-            Text("Mark as No Show", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-@Composable
-fun ActionButtonsSingle(label: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp)
-            .height(48.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-    ) {
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-
 
 @Composable
 fun PaymentProofSection(paymentProof: String?) {
@@ -1560,13 +1683,19 @@ fun ConfirmActionDialog(
 
 @Composable
 fun CheckInTimeNotice(
+    propertyType: String, // "room" or "area"
     canCheckIn: Boolean,
     isCheckInDay: Boolean,
     isBeforeCheckIn: Boolean,
-    isAfter2PM: Boolean,
+    isAfterCheckInStart: Boolean, // rename old isAfter2PM to a generic name
     isPaymentComplete: Boolean
 ) {
+    // time labels and colors depend on property type
+    val checkInLabel = if (propertyType == "area") "8:00 AM" else "2:00 PM"
+
     val (backgroundColor, borderColor, iconColor, textColor, icon, title, message) = when {
+
+        // CASE 1: Before the booking date (same for room + area)
         isBeforeCheckIn -> {
             Tuple7(
                 Color(0xFFFFF3E0),
@@ -1575,10 +1704,12 @@ fun CheckInTimeNotice(
                 Color(0xFFE65100),
                 Icons.Default.Schedule,
                 "Not Yet Check-in Date",
-                "Check-in is only available on the booking date from 2:00 PM onwards"
+                "Check-in is only available on the booking date starting $checkInLabel."
             )
         }
-        isCheckInDay && !isAfter2PM -> {
+
+        // CASE 2: It is the check-in day BUT earlier than the allowed time
+        isCheckInDay && !isAfterCheckInStart -> {
             Tuple7(
                 Color(0xFFFFF9C4),
                 Color(0xFFFDD835),
@@ -1586,10 +1717,12 @@ fun CheckInTimeNotice(
                 Color(0xFFF57F17),
                 Icons.Default.AccessTime,
                 "Too Early for Check-in",
-                "Check-in time starts at 2:00 PM. Current time is before check-in hours."
+                "Check-in time starts at $checkInLabel. Please wait until the allowed time."
             )
         }
-        isCheckInDay && isAfter2PM && !isPaymentComplete -> {
+
+        // CASE 3: Payment incomplete (same logic for rooms and areas)
+        isCheckInDay && isAfterCheckInStart && !isPaymentComplete -> {
             Tuple7(
                 Color(0xFFE3F2FD),
                 Color(0xFF64B5F6),
@@ -1597,9 +1730,11 @@ fun CheckInTimeNotice(
                 Color(0xFF0D47A1),
                 Icons.Default.Payment,
                 "Payment Required",
-                "Please complete the remaining balance payment to check in the guest."
+                "Please settle the remaining balance before check-in."
             )
         }
+
+        // CASE 4: All good — guest can check in now
         canCheckIn -> {
             Tuple7(
                 Color(0xFFE8F5E9),
@@ -1608,9 +1743,11 @@ fun CheckInTimeNotice(
                 Color(0xFF1B5E20),
                 Icons.Default.CheckCircle,
                 "Ready for Check-in",
-                "All requirements met! You can now check in the guest."
+                "Everything is complete. You can now check in the guest."
             )
         }
+
+        // CASE 5: Booking date already passed
         else -> {
             Tuple7(
                 Color(0xFFFFEBEE),
@@ -1619,7 +1756,7 @@ fun CheckInTimeNotice(
                 Color(0xFFB71C1C),
                 Icons.Default.Warning,
                 "Check-in Date Passed",
-                "Consider marking this booking as no-show if guest did not arrive."
+                "You can mark this booking as no-show if the guest did not arrive."
             )
         }
     }
@@ -1658,6 +1795,7 @@ fun CheckInTimeNotice(
     }
 }
 
+
 @Composable
 fun CheckOutTimeNotice() {
     Column(
@@ -1694,36 +1832,45 @@ fun CheckOutTimeNotice() {
     }
 }
 
-
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun BookingDetailsHeader(onDismiss: () -> Unit) {
-    TopAppBar(
-        title = {
-            Text(
-                text = "Booking Details",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White
+fun PayAtHotelNotice() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFE3F2FD), RoundedCornerShape(10.dp))
+            .border(1.dp, Color(0xFF64B5F6), RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = Color(0xFF1976D2),
+                modifier = Modifier.size(20.dp)
             )
-        },
-        navigationIcon = {
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "Back",
-                    tint = Color.White
+
+            Spacer(Modifier.width(8.dp))
+
+            Column {
+                Text(
+                    text = "Pay at Hotel",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0D47A1)
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                Text(
+                    text = "Reservation is pending. Your room will be secured only if the dates stay available up to the day before check-in.",
+                    fontSize = 11.sp,
+                    color = Color(0xFF0D47A1).copy(alpha = 0.9f),
+                    lineHeight = 16.sp
                 )
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.primary
-        )
-    )
+        }
+    }
 }
-
-
-
 
 
 private data class Tuple7<A, B, C, D, E, F, G>(

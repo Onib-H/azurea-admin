@@ -32,10 +32,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.harold.azureaadmin.R
-import com.harold.azureaadmin.data.local.DataStoreManager
-import com.harold.azureaadmin.data.repository.AdminRepository
 import com.harold.azureaadmin.ui.components.modals.DeleteItemDialog
 import kotlinx.coroutines.launch
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.harold.azureaadmin.ui.navigation.Screen
+import com.harold.azureaadmin.ui.screens.admin.AdminViewModel
 
 @Composable
 fun DrawerContent(
@@ -43,8 +44,7 @@ fun DrawerContent(
     onItemClick: (String) -> Unit,
     onClose: () -> Unit,
     navController: NavController,
-    dataStoreManager: DataStoreManager,
-    repository: AdminRepository // Add repository as parameter
+    adminViewModel: AdminViewModel = hiltViewModel()
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -59,7 +59,7 @@ fun DrawerContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.Top
     ) {
-        // Close button
+        // Close button and logo
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -82,7 +82,7 @@ fun DrawerContent(
         Spacer(modifier = Modifier.height(6.dp))
 
         val items = listOf(
-            "Dashboard", "Manage Bookings", "Manage Areas",
+            "Admin Dashboard", "Manage Bookings", "Manage Areas",
             "Manage Rooms", "Manage Amenities", "Manage Users", "Archived Users"
         )
 
@@ -111,23 +111,14 @@ fun DrawerContent(
             confirmButtonText = "Logout",
             onDismiss = { showLogoutDialog = false },
             onDelete = {
+                // Use ViewModel to handle logout and clear DataStore
                 scope.launch {
                     try {
-                        val success = repository.logout().isSuccessful
-                        if (success) {
-                            // Clear all stored data
-                            dataStoreManager.clearAll()
-
-                            // Navigate to login and clear back stack
-                            navController.navigate("login") {
-                                popUpTo(0) { inclusive = true }
+                        adminViewModel.logout {
+                            // navigate to login and clear back stack
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(Screen.Admin.route) { inclusive = true }
                             }
-                        } else {
-                            Toast.makeText(
-                                context,
-                                "Failed to logout. Try again.",
-                                Toast.LENGTH_SHORT
-                            ).show()
                         }
                     } catch (e: Exception) {
                         Toast.makeText(
@@ -135,6 +126,8 @@ fun DrawerContent(
                             "Error during logout: ${e.message}",
                             Toast.LENGTH_SHORT
                         ).show()
+                    } finally {
+                        showLogoutDialog = false
                     }
                 }
             }

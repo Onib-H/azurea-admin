@@ -57,7 +57,7 @@ fun Sidebar(
         Spacer(modifier = Modifier.height(16.dp))
 
         val items = listOf(
-            "Dashboard", "Manage Bookings", "Manage Areas",
+            "Admin Dashboard", "Manage Bookings", "Manage Areas",
             "Manage Rooms", "Manage Amenities", "Manage Users", "Archived Users"
         )
 

@@ -149,7 +149,7 @@ interface AdminApiService {
     @GET("master/bookings")
     suspend fun getBookings(
         @Query("page") page: Int = 1,
-        @Query("page_size") pageSize: Int = 9,
+        @Query("page_size") pageSize: Int = 10,
         @Query("status") status: String? = null
     ): Response<BookingResponse>
 

@@ -46,7 +46,7 @@ fun BookingCard(
 
     val propertyType = if (booking.is_venue_booking) "AREA" else "ROOM"
 
-    val price = "₱${"%,.2f".format(booking.discounted_price)}"
+    val price = "₱${"%,.2f".format(booking.total_price)}"
 
     Card(
         modifier = Modifier
@@ -183,7 +183,7 @@ fun BookingCard(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        booking.payment_method,
+                        booking.payment_method?.replaceFirstChar { it.uppercase() } ?: "—",
                         color = AzureaColors.NeutralMedium,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -315,17 +315,21 @@ fun PropertyChip(type: String) {
 
 @Composable
 fun BookingStatusChip(status: String) {
-    val (bg, text) = when (status.lowercase()) {
-        "checked_in" -> AzureaColors.PurpleLight to AzureaColors.Purple
-        "pending" -> AzureaColors.WarningLight to AzureaColors.Warning
-        "reserved" -> AzureaColors.SuccessLight to AzureaColors.Success
-        "cancelled" -> AzureaColors.ErrorLight to AzureaColors.Error
-        "rejected" -> AzureaColors.ErrorLight to AzureaColors.Error
-        "checked_out" -> AzureaColors.PurpleLight to AzureaColors.Purple
-        "no_show" -> AzureaColors.ErrorLight to AzureaColors.Error
-        else -> AzureaColors.NeutralLight to AzureaColors.NeutralDark
+    val (displayText, bg, textColor) = when (val lowerStatus = status.lowercase()) {
+        "checked_in" -> Triple("Check in", AzureaColors.PurpleLight, AzureaColors.Purple)
+        "pending" -> Triple("Pending", AzureaColors.WarningLight, AzureaColors.Warning)
+        "reserved" -> Triple("Reserved", AzureaColors.SuccessLight, AzureaColors.Success)
+        "cancelled" -> Triple("Cancelled", AzureaColors.ErrorLight, AzureaColors.Error)
+        "rejected" -> Triple("Rejected", AzureaColors.ErrorLight, AzureaColors.Error)
+        "checked_out" -> Triple("Check out", AzureaColors.PurpleLight, AzureaColors.Purple)
+        "no_show" -> Triple("No show", AzureaColors.ErrorLight, AzureaColors.Error)
+        else -> Triple(
+            lowerStatus.replace("_", " ").split(" ").joinToString(" ") { it.capitalize() },
+            AzureaColors.NeutralLight,
+            AzureaColors.NeutralDark
+        )
     }
-    StatusChip(status, bg, text)
+    StatusChip(displayText, bg, textColor)
 }
 
 private fun formatDateTime(input: String?): String {
