@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.rememberAsyncImagePainter
 import com.harold.azureaadmin.ui.components.button.DropdownField
+import com.harold.azureaadmin.ui.components.topbar.AppTopBar
 import com.harold.azureaadmin.ui.screens.admin.amenities.AmenitiesViewModel
 import com.harold.azureaadmin.utils.calculateTotalSizeKB
 import com.harold.azureaadmin.utils.clearCompressedImageCache
@@ -189,9 +190,9 @@ fun AddItemDialog(
             color = Color.White
         ) {
             Column {
-                DialogTopBar(
+                AppTopBar(
                     title = "Add New ${if (type == ItemType.ROOM) "Room" else "Area"}",
-                    onDismiss = onDismiss
+                    onBack = onDismiss
                 )
 
                 Column(

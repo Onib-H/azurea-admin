@@ -60,6 +60,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.rememberAsyncImagePainter
 import com.harold.azureaadmin.data.models.Amenity
 import com.harold.azureaadmin.ui.components.button.DropdownField
+import com.harold.azureaadmin.ui.components.topbar.AppTopBar
 import com.harold.azureaadmin.utils.calculateTotalSizeKB
 import com.harold.azureaadmin.utils.clearCompressedImageCache
 import com.harold.azureaadmin.utils.compressImage
@@ -160,9 +161,9 @@ fun EditItemDialog(
     ) {
         Surface(color = Color.White, modifier = Modifier.fillMaxSize()) {
             Column {
-                DialogTopBar(
+                AppTopBar(
                     title = "Edit ${if (type == ItemType.ROOM) "Room" else "Area"}",
-                    onDismiss = onDismiss
+                    onBack = onDismiss
                 )
 
                 Column(
