@@ -88,6 +88,7 @@ fun BookingsScreen(
             onSearchChange = { searchQuery = it },
             showFilter = false,
             onFilterClick = { },
+            showNotification = true,
 
             // Pass notification count to the header
             notificationCount = notificationCount,

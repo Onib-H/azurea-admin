@@ -73,6 +73,7 @@ fun AmenitiesScreen(
             onSearchChange = { searchQuery = it },
             showFilter = false,
             onFilterClick = {  },
+            showNotification = false,
 
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,

@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,8 +54,8 @@ fun SearchFilterHeader(
     onFilterClick: () -> Unit,
     onNotificationClick: () -> Unit,
     showFilter: Boolean = true,
-    showNotification: Boolean = true,
-    notificationCount: Int = 0 // New parameter for badge count
+    showNotification: Boolean = false,
+    notificationCount: Int = 0
 ) {
     var isSearchExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -106,7 +108,23 @@ fun SearchFilterHeader(
                 }
 
                 if (showNotification) {
-                    Box {
+                    BadgedBox(
+                        badge = {
+                            if (notificationCount > 0) {
+                                Badge(
+                                    modifier = Modifier.offset(x = (-6).dp, y = 6.dp),
+                                    containerColor = Color(0xFFE53935),
+                                    contentColor = Color.White
+                                ) {
+                                    Text(
+                                        text = if (notificationCount > 99) "99+" else notificationCount.toString(),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    ) {
                         IconButton(
                             onClick = onNotificationClick,
                             modifier = Modifier.size(48.dp)
@@ -115,27 +133,6 @@ fun SearchFilterHeader(
                                 imageVector = Icons.Outlined.Notifications,
                                 contentDescription = "Notifications"
                             )
-                        }
-
-                        // Badge
-                        if (notificationCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = 28.dp, y = 8.dp)
-                                    .size(if (notificationCount > 9) 20.dp else 18.dp)
-                                    .background(
-                                        color = Color(0xFFE53935), // Red color
-                                        shape = CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = if (notificationCount > 99) "99+" else notificationCount.toString(),
-                                    color = Color.White,
-                                    fontSize = if (notificationCount > 9) 9.sp else 10.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
                         }
                     }
                 }

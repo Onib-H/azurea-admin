@@ -106,6 +106,7 @@ fun RoomsScreen(
             onSearchChange = { searchQuery = it },
             showFilter = true,
             onFilterClick = { showFilters = true },
+            showNotification = false,
 
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,

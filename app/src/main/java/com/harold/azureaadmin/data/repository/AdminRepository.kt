@@ -140,7 +140,7 @@ class AdminRepository @Inject constructor(
 
     suspend fun getBookings(
         page: Int = 1,
-        pageSize: Int = 10,
+        pageSize: Int = 20,
         status: String? = null
     ): Response<BookingResponse> {
         return api.getBookings(page, pageSize, status)

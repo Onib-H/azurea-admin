@@ -1,10 +1,12 @@
 package com.harold.azureaadmin.ui.screens.admin.bookings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.harold.azureaadmin.data.models.*
 import com.harold.azureaadmin.data.repository.AdminRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import jakarta.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,8 +15,16 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class BookingViewModel @Inject constructor(
-    private val repository: AdminRepository
+    private val repository: AdminRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    // SharedPreferences for persisting seen booking IDs
+    private val prefs = context.getSharedPreferences("booking_notifications", Context.MODE_PRIVATE)
+
+    companion object {
+        private const val PREF_SEEN_BOOKING_IDS = "seen_booking_ids"
+    }
 
     // ============================================================================
     // STATE MANAGEMENT
@@ -41,17 +51,31 @@ class BookingViewModel @Inject constructor(
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
 
-    // NEW: Notification count for new/pending bookings
+    // Notification count for new/pending bookings
     private val _notificationCount = MutableStateFlow(0)
     val notificationCount: StateFlow<Int> = _notificationCount.asStateFlow()
 
-    // Store previous booking IDs to detect new ones
-    private var previousBookingIds = setOf<Int>()
-    private var isFirstLoad = true
+    // Load seen booking IDs from SharedPreferences
+    private var seenBookingIds: MutableSet<Int> = loadSeenBookingIds()
 
     // Cache current filter state
     private var currentPage = 1
     private var currentStatus: String? = null
+
+    // ============================================================================
+    // PERSISTENCE HELPERS
+    // ============================================================================
+
+    private fun loadSeenBookingIds(): MutableSet<Int> {
+        val savedIds = prefs.getStringSet(PREF_SEEN_BOOKING_IDS, emptySet()) ?: emptySet()
+        return savedIds.mapNotNull { it.toIntOrNull() }.toMutableSet()
+    }
+
+    private fun saveSeenBookingIds() {
+        prefs.edit()
+            .putStringSet(PREF_SEEN_BOOKING_IDS, seenBookingIds.map { it.toString() }.toSet())
+            .apply()
+    }
 
     // ============================================================================
     // BOOKING LIST OPERATIONS
@@ -65,24 +89,13 @@ class BookingViewModel @Inject constructor(
             _error.value = null
 
             try {
-                val response = repository.getBookings(page, pageSize = 9, status)
+                val response = repository.getBookings(page, pageSize = 20, status)
 
                 response.body()?.let { body ->
                     val newBookings = body.data
 
                     // Calculate notification count
-                    if (!isFirstLoad) {
-                        calculateNotificationCount(newBookings)
-                    } else {
-                        // On first load, just count pending bookings
-                        _notificationCount.value = newBookings.count {
-                            it.status.equals("pending", ignoreCase = true)
-                        }
-                        isFirstLoad = false
-                    }
-
-                    // Update previous IDs for next comparison
-                    previousBookingIds = newBookings.map { it.id }.toSet()
+                    calculateNotificationCount(newBookings)
 
                     _bookings.value = newBookings
                     _pagination.value = body.pagination
@@ -101,22 +114,16 @@ class BookingViewModel @Inject constructor(
     }
 
     /**
-     * Calculate notification count based on new bookings and pending status
+     * Calculate notification count - only count unseen pending bookings
      */
-    private fun calculateNotificationCount(newBookings: List<BookingData>) {
-        val currentIds = newBookings.map { it.id }.toSet()
-
-        // Find truly new booking IDs (not in previous list)
-        val newBookingIds = currentIds - previousBookingIds
-
-        // Count new bookings + existing pending bookings
-        val newCount = newBookings.count { booking ->
-            // Either it's a new booking OR it has pending status
-            newBookingIds.contains(booking.id) ||
+    private fun calculateNotificationCount(currentBookings: List<BookingData>) {
+        // Count bookings that are both unseen AND pending
+        val unseenPendingBookings = currentBookings.filter { booking ->
+            !seenBookingIds.contains(booking.id) &&
                     booking.status.equals("pending", ignoreCase = true)
         }
 
-        _notificationCount.value = newCount
+        _notificationCount.value = unseenPendingBookings.size
     }
 
     fun refreshBookings() {
@@ -139,9 +146,20 @@ class BookingViewModel @Inject constructor(
     }
 
     /**
-     * Clear notification count (call when user views notifications)
+     * Mark all current bookings as seen and save to preferences
      */
     fun clearNotificationCount() {
+        val currentBookings = _bookings.value
+
+        // Mark all current bookings as seen
+        currentBookings.forEach { booking ->
+            seenBookingIds.add(booking.id)
+        }
+
+        // Persist to SharedPreferences
+        saveSeenBookingIds()
+
+        // Clear the notification badge
         _notificationCount.value = 0
     }
 
@@ -358,9 +376,7 @@ class BookingViewModel @Inject constructor(
      * Recalculate notification count from current bookings list
      */
     private fun recalculateNotificationCount() {
-        _notificationCount.value = _bookings.value.count {
-            it.status.equals("pending", ignoreCase = true)
-        }
+        calculateNotificationCount(_bookings.value)
     }
 
     // ============================================================================

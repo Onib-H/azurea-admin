@@ -27,6 +27,7 @@ fun <T> ListScreenContainer(
     onSearchChange: (String) -> Unit,
     showFilter: Boolean,
     onFilterClick: () -> Unit,
+    showNotification: Boolean,
     onNotificationClick: () -> Unit = {}, // Add this
     notificationCount: Int = 0, // Add this
     isRefreshing: Boolean,
@@ -55,7 +56,8 @@ fun <T> ListScreenContainer(
             onFilterClick = onFilterClick,
             onNotificationClick = onNotificationClick,
             showFilter = showFilter,
-            notificationCount = notificationCount
+            notificationCount = notificationCount,
+            showNotification = showNotification
         )
 
         Box(modifier = Modifier.fillMaxSize()) {
