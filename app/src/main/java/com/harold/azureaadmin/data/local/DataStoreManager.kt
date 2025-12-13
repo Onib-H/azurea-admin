@@ -1,60 +1,59 @@
 package com.harold.azureaadmin.data.local
 
 import android.content.Context
-import android.util.Log
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 
 class DataStoreManager(private val context: Context) {
 
     companion object {
         private val Context.dataStore by preferencesDataStore("user_prefs")
-        val COOKIE_KEY = stringPreferencesKey("auth_cookie")
+        private val COOKIE_JSON_KEY = stringPreferencesKey("cookie_json")
+        private val SESSION_EXPIRY_KEY = longPreferencesKey("session_expiry")
     }
 
     @Volatile
-    private var cachedCookie: String? = null
+    private var cachedCookieJson: String? = null
+
+    @Volatile
+    private var cachedSessionExpiry: Long? = null
 
     @Volatile
     private var isCacheInitialized = false
 
     suspend fun initializeCache() {
         if (isCacheInitialized) return
-        try {
-            val prefs = context.dataStore.data.first()
-            cachedCookie = prefs[COOKIE_KEY]
-        } catch (_: Exception) {
-            cachedCookie = null
-        } finally {
-            isCacheInitialized = true
-        }
+
+        val prefs = context.dataStore.data.first()
+        cachedCookieJson = prefs[COOKIE_JSON_KEY]
+        cachedSessionExpiry = prefs[SESSION_EXPIRY_KEY]
+        isCacheInitialized = true
     }
 
-    fun getCachedCookieJson(): String? = cachedCookie
+    fun getCachedCookieJson(): String? = cachedCookieJson
+
+    fun isSessionExpired(): Boolean {
+        val expiry = cachedSessionExpiry ?: return true
+        return System.currentTimeMillis() > expiry
+    }
 
     suspend fun saveCookie(cookieJson: String) {
-        cachedCookie = cookieJson
-        isCacheInitialized = true
-        context.dataStore.edit { prefs -> prefs[COOKIE_KEY] = cookieJson }
-    }
+        val expiry30Days =
+            System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000)
 
-    val getCookie: Flow<String?>
-        get() = context.dataStore.data.map { prefs ->
-            prefs[COOKIE_KEY].also { cachedCookie = it }
+        cachedCookieJson = cookieJson
+        cachedSessionExpiry = expiry30Days
+
+        context.dataStore.edit { prefs ->
+            prefs[COOKIE_JSON_KEY] = cookieJson
+            prefs[SESSION_EXPIRY_KEY] = expiry30Days
         }
-
-    suspend fun clearCookie() {
-        cachedCookie = null
-        context.dataStore.edit { prefs -> prefs.remove(COOKIE_KEY) }
     }
 
     suspend fun clearAll() {
-        cachedCookie = null
-        context.dataStore.edit { prefs -> prefs.clear() }
+        cachedCookieJson = null
+        cachedSessionExpiry = null
+        context.dataStore.edit { it.clear() }
     }
-
 }

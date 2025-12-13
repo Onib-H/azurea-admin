@@ -1,5 +1,6 @@
 package com.harold.azureaadmin.ui.screens.login
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.harold.azureaadmin.data.local.DataStoreManager
@@ -38,7 +39,9 @@ class LoginViewModel @Inject constructor(
             _loginState.value = LoginState.Loading
 
             try {
+                Log.d("LOGIN", "Starting login request at ${System.currentTimeMillis()}")
                 val response = repo.login(email, password)
+                Log.d("LOGIN", "Login response received at ${System.currentTimeMillis()}")
 
                 if (!response.isSuccessful) {
                     _loginState.value = when (response.code()) {

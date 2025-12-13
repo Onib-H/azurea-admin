@@ -10,7 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
 
 @HiltViewModel
 class BookingViewModel @Inject constructor(
@@ -39,9 +38,16 @@ class BookingViewModel @Inject constructor(
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
-    // Add processing state for button feedback
     private val _isProcessing = MutableStateFlow(false)
     val isProcessing: StateFlow<Boolean> = _isProcessing.asStateFlow()
+
+    // NEW: Notification count for new/pending bookings
+    private val _notificationCount = MutableStateFlow(0)
+    val notificationCount: StateFlow<Int> = _notificationCount.asStateFlow()
+
+    // Store previous booking IDs to detect new ones
+    private var previousBookingIds = setOf<Int>()
+    private var isFirstLoad = true
 
     // Cache current filter state
     private var currentPage = 1
@@ -62,7 +68,23 @@ class BookingViewModel @Inject constructor(
                 val response = repository.getBookings(page, pageSize = 9, status)
 
                 response.body()?.let { body ->
-                    _bookings.value = body.data
+                    val newBookings = body.data
+
+                    // Calculate notification count
+                    if (!isFirstLoad) {
+                        calculateNotificationCount(newBookings)
+                    } else {
+                        // On first load, just count pending bookings
+                        _notificationCount.value = newBookings.count {
+                            it.status.equals("pending", ignoreCase = true)
+                        }
+                        isFirstLoad = false
+                    }
+
+                    // Update previous IDs for next comparison
+                    previousBookingIds = newBookings.map { it.id }.toSet()
+
+                    _bookings.value = newBookings
                     _pagination.value = body.pagination
                     currentPage = page
                     currentStatus = status
@@ -76,6 +98,25 @@ class BookingViewModel @Inject constructor(
                 _loading.value = false
             }
         }
+    }
+
+    /**
+     * Calculate notification count based on new bookings and pending status
+     */
+    private fun calculateNotificationCount(newBookings: List<BookingData>) {
+        val currentIds = newBookings.map { it.id }.toSet()
+
+        // Find truly new booking IDs (not in previous list)
+        val newBookingIds = currentIds - previousBookingIds
+
+        // Count new bookings + existing pending bookings
+        val newCount = newBookings.count { booking ->
+            // Either it's a new booking OR it has pending status
+            newBookingIds.contains(booking.id) ||
+                    booking.status.equals("pending", ignoreCase = true)
+        }
+
+        _notificationCount.value = newCount
     }
 
     fun refreshBookings() {
@@ -95,6 +136,13 @@ class BookingViewModel @Inject constructor(
         currentPage = 1
         currentStatus = status
         fetchBookings(page = 1, status = status)
+    }
+
+    /**
+     * Clear notification count (call when user views notifications)
+     */
+    fun clearNotificationCount() {
+        _notificationCount.value = 0
     }
 
     // ============================================================================
@@ -129,9 +177,6 @@ class BookingViewModel @Inject constructor(
     // OPTIMIZED BOOKING STATUS UPDATES
     // ============================================================================
 
-    /**
-     * Optimized updateBookingStatus with immediate UI feedback
-     */
     fun updateBookingStatus(
         bookingId: Int,
         newStatus: String,
@@ -145,7 +190,6 @@ class BookingViewModel @Inject constructor(
             _isProcessing.value = true
             _error.value = null
 
-            // Optimistic update - update UI immediately
             _bookingDetails.value?.let { currentDetails ->
                 val optimisticUpdate = currentDetails.copy(
                     status = newStatus,
@@ -167,21 +211,20 @@ class BookingViewModel @Inject constructor(
 
                 if (response.isSuccessful) {
                     response.body()?.let { body ->
-                        // Update with server response
                         _bookingDetails.value = body.data
                         _statusUpdateMessage.value = body.message
                         updateBookingInList(body.data)
+
+                        // Recalculate notification count after status change
+                        recalculateNotificationCount()
                     }
                 } else {
-                    // Revert optimistic update on failure
                     _error.value = "Unable to update booking status: ${response.code()}"
-                    // Reload the original data
                     getBookingDetails(bookingId)
                 }
 
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Error updating booking status"
-                // Revert optimistic update on failure
                 getBookingDetails(bookingId)
             } finally {
                 _isProcessing.value = false
@@ -189,9 +232,6 @@ class BookingViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Record payment and update status to reserved
-     */
     fun recordPaymentAndReserve(bookingId: Int, amount: Double) {
         viewModelScope.launch {
             if (_isProcessing.value) return@launch
@@ -199,7 +239,6 @@ class BookingViewModel @Inject constructor(
             _isProcessing.value = true
             _error.value = null
 
-            // Optimistic update
             _bookingDetails.value?.let { currentDetails ->
                 val optimisticUpdate = currentDetails.copy(
                     status = "reserved",
@@ -211,16 +250,14 @@ class BookingViewModel @Inject constructor(
             }
 
             try {
-                // Record payment first
                 val paymentResponse = repository.recordPayment(bookingId, amount)
 
                 if (!paymentResponse.isSuccessful) {
                     _error.value = "Failed to record payment: ${paymentResponse.code()}"
-                    getBookingDetails(bookingId) // Revert
+                    getBookingDetails(bookingId)
                     return@launch
                 }
 
-                // Then update status to reserved with down_payment
                 val statusRequest = UpdateBookingStatusRequest(
                     status = "reserved",
                     down_payment = amount
@@ -232,28 +269,22 @@ class BookingViewModel @Inject constructor(
                         _bookingDetails.value = body.data
                         _statusUpdateMessage.value = "Booking reserved successfully"
                         updateBookingInList(body.data)
+                        recalculateNotificationCount()
                     }
                 } else {
                     _error.value = "Payment recorded but failed to reserve: ${statusResponse.code()}"
-                    getBookingDetails(bookingId) // Reload actual state
+                    getBookingDetails(bookingId)
                 }
 
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Error during reservation process"
-                getBookingDetails(bookingId) // Revert on error
+                getBookingDetails(bookingId)
             } finally {
                 _isProcessing.value = false
             }
         }
     }
 
-    /**
-     * OPTIMIZED: Parallel API calls instead of sequential
-     * This reduces the total time by ~50%
-     */
-    /**
-     * Record remaining payment and check in guest
-     */
     fun recordPaymentAndCheckIn(bookingId: Int, amount: Double) {
         viewModelScope.launch {
             if (_isProcessing.value) return@launch
@@ -261,7 +292,6 @@ class BookingViewModel @Inject constructor(
             _isProcessing.value = true
             _error.value = null
 
-            // Optimistic update
             _bookingDetails.value?.let { currentDetails ->
                 val optimisticUpdate = currentDetails.copy(
                     status = "checked_in",
@@ -272,18 +302,16 @@ class BookingViewModel @Inject constructor(
             }
 
             try {
-                // Only record payment if amount > 0
                 if (amount > 0) {
                     val paymentResponse = repository.recordPayment(bookingId, amount)
 
                     if (!paymentResponse.isSuccessful) {
                         _error.value = "Failed to record payment: ${paymentResponse.code()}"
-                        getBookingDetails(bookingId) // Revert
+                        getBookingDetails(bookingId)
                         return@launch
                     }
                 }
 
-                // Update status to checked_in
                 val statusRequest = UpdateBookingStatusRequest(status = "checked_in")
                 val statusResponse = repository.updateBookingStatus(bookingId, statusRequest)
 
@@ -292,6 +320,7 @@ class BookingViewModel @Inject constructor(
                         _bookingDetails.value = body.data
                         _statusUpdateMessage.value = "Guest checked in successfully"
                         updateBookingInList(body.data)
+                        recalculateNotificationCount()
                     }
                 } else {
                     _error.value = if (amount > 0) {
@@ -299,21 +328,18 @@ class BookingViewModel @Inject constructor(
                     } else {
                         "Failed to check in: ${statusResponse.code()}"
                     }
-                    getBookingDetails(bookingId) // Reload actual state
+                    getBookingDetails(bookingId)
                 }
 
             } catch (e: Exception) {
                 _error.value = e.localizedMessage ?: "Error during check-in process"
-                getBookingDetails(bookingId) // Revert on error
+                getBookingDetails(bookingId)
             } finally {
                 _isProcessing.value = false
             }
         }
     }
 
-    /**
-     * Optimized list update with immediate feedback
-     */
     private fun updateBookingInList(updatedDetails: BookingDetails) {
         _bookings.value = _bookings.value.map { booking ->
             if (booking.id == updatedDetails.id) {
@@ -325,6 +351,15 @@ class BookingViewModel @Inject constructor(
             } else {
                 booking
             }
+        }
+    }
+
+    /**
+     * Recalculate notification count from current bookings list
+     */
+    private fun recalculateNotificationCount() {
+        _notificationCount.value = _bookings.value.count {
+            it.status.equals("pending", ignoreCase = true)
         }
     }
 

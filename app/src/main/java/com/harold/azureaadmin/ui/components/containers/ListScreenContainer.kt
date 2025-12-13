@@ -27,15 +27,14 @@ fun <T> ListScreenContainer(
     onSearchChange: (String) -> Unit,
     showFilter: Boolean,
     onFilterClick: () -> Unit,
-
+    onNotificationClick: () -> Unit = {}, // Add this
+    notificationCount: Int = 0, // Add this
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
-
     showBlackout: Boolean,
     loading: Boolean,
     error: String?,
     items: List<T>,
-
     emptyIcon: ImageVector,
     emptyTitle: String,
     emptySubtitle: String? = null,
@@ -54,7 +53,9 @@ fun <T> ListScreenContainer(
             searchQuery = searchQuery,
             onSearchChange = onSearchChange,
             onFilterClick = onFilterClick,
-            showFilter = showFilter
+            onNotificationClick = onNotificationClick,
+            showFilter = showFilter,
+            notificationCount = notificationCount
         )
 
         Box(modifier = Modifier.fillMaxSize()) {

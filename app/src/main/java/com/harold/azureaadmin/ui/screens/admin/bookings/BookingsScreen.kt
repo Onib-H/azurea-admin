@@ -23,6 +23,7 @@ fun BookingsScreen(
     val bookings by viewModel.bookings.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val notificationCount by viewModel.notificationCount.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedBookingId by remember { mutableStateOf<Int?>(null) }
@@ -34,7 +35,7 @@ fun BookingsScreen(
 
     LaunchedEffect(Unit) { viewModel.fetchBookings() }
 
-// FILTERING FIRST
+    // FILTERING FIRST
     val filtered = if (searchQuery.isBlank()) {
         bookings
     } else {
@@ -58,9 +59,6 @@ fun BookingsScreen(
             }
         }
     }
-
-
-
 
     val onRefresh = {
         if (!refreshLock) {
@@ -90,6 +88,14 @@ fun BookingsScreen(
             onSearchChange = { searchQuery = it },
             showFilter = false,
             onFilterClick = { },
+
+            // Pass notification count to the header
+            notificationCount = notificationCount,
+            onNotificationClick = {
+                // Handle notification click - could show a dialog with pending bookings
+                // For now, just clear the count when clicked
+                viewModel.clearNotificationCount()
+            },
 
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
@@ -122,9 +128,10 @@ fun BookingsScreen(
         BookingDetailsDialog(
             bookingId = id,
             viewModel = viewModel,
-            onDismiss = { selectedBookingId = null
-                viewModel.fetchBookings()}
+            onDismiss = {
+                selectedBookingId = null
+                viewModel.fetchBookings()
+            }
         )
     }
 }
-

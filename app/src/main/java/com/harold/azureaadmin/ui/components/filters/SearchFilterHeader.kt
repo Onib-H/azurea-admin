@@ -7,11 +7,14 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -38,15 +41,19 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-@Composable
+import androidx.compose.material.icons.outlined.Notifications
 
+@Composable
 fun SearchFilterHeader(
     title: String,
     searchPlaceholder: String,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
     onFilterClick: () -> Unit,
-    showFilter: Boolean = true
+    onNotificationClick: () -> Unit,
+    showFilter: Boolean = true,
+    showNotification: Boolean = true,
+    notificationCount: Int = 0 // New parameter for badge count
 ) {
     var isSearchExpanded by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -58,7 +65,6 @@ fun SearchFilterHeader(
             keyboardController?.show()
         }
     }
-
 
     Column(
         modifier = Modifier
@@ -95,8 +101,43 @@ fun SearchFilterHeader(
                 ) {
                     Icon(
                         imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Filled.Search,
-                        contentDescription = if (isSearchExpanded) "Close Search" else "Open Search",
+                        contentDescription = if (isSearchExpanded) "Close Search" else "Open Search"
                     )
+                }
+
+                if (showNotification) {
+                    Box {
+                        IconButton(
+                            onClick = onNotificationClick,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Notifications,
+                                contentDescription = "Notifications"
+                            )
+                        }
+
+                        // Badge
+                        if (notificationCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = 28.dp, y = 8.dp)
+                                    .size(if (notificationCount > 9) 20.dp else 18.dp)
+                                    .background(
+                                        color = Color(0xFFE53935), // Red color
+                                        shape = CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (notificationCount > 99) "99+" else notificationCount.toString(),
+                                    color = Color.White,
+                                    fontSize = if (notificationCount > 9) 9.sp else 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
                 }
 
                 if (showFilter) {
